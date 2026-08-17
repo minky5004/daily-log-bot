@@ -1,0 +1,36 @@
+name: daily-log
+
+# 자정 cron 은 파이프라인이 업로드까지 이어진 뒤에 이 자리에 붙는다 — 미완성을 매일 돌릴 이유가
+# 없다. 그때까지 이 워크플로는 사이클마다 러너를 밟는 수동 통로다
+on:
+  workflow_dispatch:
+
+# 하는 일은 소스 읽기와 외부 호출뿐. 기본값은 리포 설정에 따라 쓰기까지 열린다
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # 외부 API 응답을 기다리다 멈추면 기본 상한 6시간까지 러너를 붙잡는다
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # 매 실행마다 도는 Gradle 빌드가 이 스택의 대가라, 캐시는 선택이 아니라 전제다.
+      # v6 은 캐시를 별도 약관이 붙는 비공개 컴포넌트로 분리 — 라이선스 판단이라 v5 유지
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Build
+        run: ./gradlew build
+
+      # 빌드와 나누는 것은 컴파일 실패와 실행 실패를 로그의 같은 자리에서 보지 않기 위해서
+      - name: Run
+        run: ./gradlew run --quiet
