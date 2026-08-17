@@ -32,5 +32,8 @@ jobs:
         run: ./gradlew build
 
       # 빌드와 나누는 것은 컴파일 실패와 실행 실패를 로그의 같은 자리에서 보지 않기 위해서
+      # 자동 발급되는 GITHUB_TOKEN 은 이 리포에만 닿아 계정 전체 · private 조회가 되지 않는다
       - name: Run
         run: ./gradlew run --quiet
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}

@@ -17,6 +17,19 @@ repositories {
 	mavenCentral()
 }
 
+dependencies {
+	// HTTP 는 JDK 의 HttpClient 로 족하고 JSON 만 외부에 맡긴다
+	implementation 'com.fasterxml.jackson.core:jackson-databind:2.19.0'
+
+	testImplementation platform('org.junit:junit-bom:5.12.2')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+	useJUnitPlatform()
+}
+
 application {
 	mainClass = 'com.minky.dailylogbot.DailyLogBot'
 }
