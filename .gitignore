@@ -1,0 +1,23 @@
+.gradle
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+
+### VS Code ###
+.vscode/
+
+### Claude ###
+CLAUDE.md
+.claude/
+.claude-*/
+.mcp.json
+
+### local ###
+*.log
+.env
