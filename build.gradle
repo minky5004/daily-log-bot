@@ -1,0 +1,22 @@
+plugins {
+	id 'java'
+	// 러너가 산출물 경로를 알 필요 없이 ./gradlew run 한 줄로 실행하기 위한 것
+	id 'application'
+}
+
+group = 'com.minky'
+version = '0.1.0'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+application {
+	mainClass = 'com.minky.dailylogbot.DailyLogBot'
+}
