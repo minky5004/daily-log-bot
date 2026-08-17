@@ -31,8 +31,15 @@ public record DailyActivity(DayWindow window, List<Commit> commits, List<PullReq
 	public record PullRequest(
 			String repo, boolean isPrivate, int number, String title, String body, Instant createdAt) {}
 
+	/**
+	 * 올릴 것이 없는 날인가.
+	 *
+	 * <p>PR 이 있어도 커밋이 0건이면 비어 있는 것으로 본다 — 기록의 {@code start} 는 그날 첫
+	 * 커밋 시각이라, 커밋이 없으면 시각을 정할 근거 자체가 없다. 밤에 브랜치만 밀어 두고 다음
+	 * 날 PR 을 여는 흐름이 실제로 그 경우다.
+	 */
 	public boolean isEmpty() {
-		return commits.isEmpty() && pullRequests.isEmpty();
+		return commits.isEmpty();
 	}
 
 	/** 기록의 {@code start} 가 될 자리. 지어낸 값이 아니라 그날 실제로 남은 첫 흔적이다. */

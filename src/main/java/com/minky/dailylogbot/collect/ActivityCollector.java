@@ -69,6 +69,12 @@ public final class ActivityCollector {
 			query.put("until", window.until());
 
 			for (JsonNode commit : github.getAllPages("/repos/" + fullName + "/commits", query)) {
+				// 머지 커밋은 자기가 들여온 커밋들의 변경을 first parent 기준으로 한 번 더
+				// 들고 있다. 기능 브랜치를 머지 커밋으로만 합치는 흐름이라 PR 을 머지한 날은
+				// 같은 파일 · 같은 증감이 두 번 잡히고, 제목도 `Merge pull request #N` 뿐이다
+				if (commit.path("parents").size() > 1) {
+					continue;
+				}
 				String sha = commit.path("sha").asText();
 				if (seen.add(sha)) {
 					commits.add(detail(fullName, isPrivate, sha));
@@ -85,11 +91,14 @@ public final class ActivityCollector {
 		List<String> files = new ArrayList<>();
 		commit.path("files").forEach(file -> files.add(file.path("filename").asText()));
 
+		// author date 가 아니라 committer date 다. since · until 이 거르는 것이 committer date 라
+		// (author 시각만 걸친 창으로는 조회되지 않는 것을 확인), author date 를 담으면 rebase 로
+		// 두 시각이 갈린 커밋에서 창 밖 시각이 기록된다 — 그 최솟값이 곧 기록의 start 다
 		return new DailyActivity.Commit(
 				fullName,
 				isPrivate,
 				sha,
-				Instant.parse(commit.path("commit").path("author").path("date").asText()),
+				Instant.parse(commit.path("commit").path("committer").path("date").asText()),
 				commit.path("commit").path("message").asText(),
 				commit.path("stats").path("additions").asInt(),
 				commit.path("stats").path("deletions").asInt(),
