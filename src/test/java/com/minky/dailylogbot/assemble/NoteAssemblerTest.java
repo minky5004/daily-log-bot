@@ -110,6 +110,18 @@ class NoteAssemblerTest {
 	}
 
 	@Test
+	@DisplayName("50자를 넘는 리포명은 태그에서 뺀다 — 노트 한 장이 거부되는 자리")
+	void longRepoName() {
+		String tooLong = "a".repeat(51);
+		AnonymousDay day = day(
+				FIRST,
+				List.of(commit("minky5004/" + tooLong), commit("minky5004/study-log")),
+				List.of());
+
+		assertTrue(markdown(day, DRAFT).contains("tags: [\"study-log\"]"));
+	}
+
+	@Test
 	@DisplayName("public 활동이 없던 날의 태그는 빈 배열")
 	void noTags() {
 		AnonymousDay day = new AnonymousDay(

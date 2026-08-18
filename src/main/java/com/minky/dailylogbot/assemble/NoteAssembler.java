@@ -30,6 +30,9 @@ public final class NoteAssembler {
 
 	private static final String DELIMITER = "---\n";
 
+	/** study-log 의 태그 컬럼 길이. 넘긴 태그 하나가 노트 한 장을 통째로 거부시킨다. */
+	private static final int MAX_TAG = 50;
+
 	private NoteAssembler() {}
 
 	public static TilNote assemble(AnonymousDay day, TilDraft draft) {
@@ -65,9 +68,23 @@ public final class NoteAssembler {
 	 */
 	private static List<String> tags(AnonymousDay day) {
 		SequencedSet<String> names = new LinkedHashSet<>();
-		day.commits().forEach(commit -> names.add(shortName(commit.repo())));
-		day.pullRequests().forEach(pull -> names.add(shortName(pull.repo())));
+		day.commits().forEach(commit -> add(names, commit.repo()));
+		day.pullRequests().forEach(pull -> add(names, pull.repo()));
 		return List.copyOf(names);
+	}
+
+	/**
+	 * 상한을 넘긴 이름은 태그로 삼지 않는다.
+	 *
+	 * <p>길이가 리포명에서 오는 값이라 이 도구가 정할 수 없다. 자르면 있지도 않은 리포 이름이
+	 * 태그로 남고, 그대로 보내면 그날 기록이 통째로 거부된다 — 태그 하나를 버리는 쪽이 싸다.
+	 * 그 이름 자체는 본문에 남아 그날 한 일에서 사라지지는 않는다.
+	 */
+	private static void add(SequencedSet<String> names, String fullName) {
+		String name = shortName(fullName);
+		if (name.length() <= MAX_TAG) {
+			names.add(name);
+		}
 	}
 
 	private static String shortName(String fullName) {
