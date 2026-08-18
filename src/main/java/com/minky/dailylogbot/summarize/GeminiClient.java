@@ -22,7 +22,7 @@ import java.time.Duration;
  * 서다. 쓰는 기능이 생성 호출 하나뿐이라 SDK 가 덜어 줄 것이 스키마 빌더 정도인데, 그 대가로
  * 의존 트리가 수십 개 늘어난다.
  */
-public final class GeminiClient {
+public final class GeminiClient implements SummaryModel {
 
 	/** 무료 티어. 하루 한 번 호출이라 한도가 판단 근거가 되지 못한다. */
 	private static final String MODEL = "gemini-3.6-flash";
@@ -55,6 +55,7 @@ public final class GeminiClient {
 	 * <p>JSON 을 프롬프트로 부탁하고 파싱 실패마다 재시도하는 코드를 두느니 API 가 형태를
 	 * 보장하게 한다. 그래도 내용이 우리 기대와 맞는지는 부르는 쪽이 확인한다.
 	 */
+	@Override
 	public String generate(String prompt, JsonNode responseSchema) {
 		HttpRequest request = HttpRequest.newBuilder(URI.create(BASE + MODEL + ":generateContent"))
 				// 키를 질의 문자열이 아니라 헤더로 보낸다. URL 은 실패 메시지와 함께 그대로

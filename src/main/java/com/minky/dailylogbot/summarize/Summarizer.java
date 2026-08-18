@@ -26,14 +26,16 @@ public final class Summarizer {
 	private static final int MAX_SUMMARY = 500;
 
 	/*
-	  프롬프트에 싣는 커밋당 파일 수 · PR 본문 길이의 상한.
+	  프롬프트에 싣는 커밋당 파일 수 · 커밋 메시지와 PR 본문의 길이 상한.
 
 	  하루 커밋이 몇 건이라 평소에는 걸리지 않지만, 생성물이나 의존 잠금 파일이 한 커밋에
-	  수백 개씩 딸려 오는 날이 있다. 그런 목록은 요약에 보태는 것이 없으면서 분당 토큰 한도만
-	  밀어 올린다. 넘친 몫은 개수로 알려 "파일이 더 있었다" 는 사실 자체는 남긴다.
+	  수백 개씩 딸려 오는 날이 있다. 메시지 쪽도 같다 — squash 머지 커밋은 PR 본문을 통째로
+	  메시지로 이고 오는데 부모가 하나라 머지 제외 규칙에 걸리지 않는다. 그런 덩어리는 요약에
+	  보태는 것이 없으면서 분당 토큰 한도만 밀어 올린다. 넘친 몫은 개수로 알려 "더 있었다" 는
+	  사실 자체는 남긴다.
 	*/
 	private static final int MAX_FILES = 20;
-	private static final int MAX_PR_BODY = 500;
+	private static final int MAX_TEXT = 500;
 
 	private static final String RULES = """
 			너는 개발자의 하루 활동을 TIL 기록으로 옮기는 기록자다. 아래 활동만 근거로 삼는다.
@@ -49,15 +51,25 @@ public final class Summarizer {
 			활동
 			""";
 
-	private final GeminiClient gemini;
+	/**
+	 * 공개 활동이 하나도 없는 날에만 덧붙인다.
+	 *
+	 * <p>이런 날은 저장소 이름이 프롬프트에 한 번도 나오지 않는데, 규칙은 저장소마다 절을 만들라고
+	 * 시킨다. 지시를 지키려면 모델은 없는 이름을 지어내는 수밖에 없다 — 상충을 남겨 두고 결과를
+	 * 검사로 잡으려 들면, 지어낸 이름은 형태가 멀쩡해서 {@link #brokenReason} 을 그대로 통과한다.
+	 */
+	private static final String PUBLIC_NONE =
+			"\n공개 활동이 없는 날이다. 저장소 절을 만들지 말고 위 집계 한 줄만 본문으로 쓴다.\n";
+
+	private final SummaryModel model;
 	private final ObjectMapper mapper = new ObjectMapper();
 
-	public Summarizer(GeminiClient gemini) {
-		this.gemini = gemini;
+	public Summarizer(SummaryModel model) {
+		this.model = model;
 	}
 
 	public TilDraft summarize(AnonymousDay day) {
-		TilDraft draft = parse(gemini.generate(prompt(day), schema()));
+		TilDraft draft = parse(model.generate(prompt(day), schema()));
 
 		String broken = brokenReason(draft);
 		if (broken != null) {
@@ -88,7 +100,7 @@ public final class Summarizer {
 						KST_TIME.format(commit.committedAt()),
 						commit.additions(),
 						commit.deletions(),
-						indent(commit.message())));
+						indent(clip(commit.message(), MAX_TEXT))));
 				sb.append("  파일: %s\n".formatted(files(commit.files())));
 			}
 		}
@@ -99,13 +111,17 @@ public final class Summarizer {
 				sb.append("- %s#%d %s · %s\n".formatted(
 						pull.repo(), pull.number(), KST_TIME.format(pull.createdAt()), pull.title()));
 				if (pull.body() != null && !pull.body().isBlank()) {
-					sb.append("  %s\n".formatted(indent(clip(pull.body(), MAX_PR_BODY))));
+					sb.append("  %s\n".formatted(indent(clip(pull.body(), MAX_TEXT))));
 				}
 			}
 		}
 
 		if (!day.hidden().isEmpty()) {
 			sb.append("\n비공개\n- %s\n".formatted(day.hidden().describe()));
+		}
+
+		if (day.commits().isEmpty() && day.pullRequests().isEmpty()) {
+			sb.append(PUBLIC_NONE);
 		}
 		return sb.toString();
 	}
@@ -123,8 +139,18 @@ public final class Summarizer {
 				+ " 외 %d개".formatted(files.size() - MAX_FILES);
 	}
 
+	/**
+	 * 상한을 넘긴 글을 자른다.
+	 *
+	 * <p>경계에 이모지가 걸리면 한 칸 앞에서 끊는다. 자바의 한 글자는 코드 유닛이라 그냥 자르면
+	 * 짝을 잃은 대리 문자가 남고, UTF-8 로 나가면서 {@code ?} 한 개로 바뀐다.
+	 */
 	private static String clip(String text, int max) {
-		return text.length() <= max ? text : text.substring(0, max) + " …";
+		if (text.length() <= max) {
+			return text;
+		}
+		int end = Character.isHighSurrogate(text.charAt(max - 1)) ? max - 1 : max;
+		return text.substring(0, end) + " …";
 	}
 
 	/**
