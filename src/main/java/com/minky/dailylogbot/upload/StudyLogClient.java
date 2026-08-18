@@ -32,10 +32,18 @@ public final class StudyLogClient implements StudyLog {
 
 	/**
 	 * 요청 하나의 상한. study-log 는 Render 무료 티어라 유휴 뒤 첫 요청이 앱을 깨우고, 그 콜드
-	 * 스타트가 30초를 넘긴다(실측 — 30초 상한에서 첫 조회가 타임아웃). 깨어난 뒤로는 빠르므로
-	 * 이 상한에 실제로 걸리는 것은 첫 호출뿐이다. 잡 상한 15분 안에 여러 콜드 스타트가 겹쳐도 남는다.
+	 * 스타트가 이 상한 하나를 넘기기도 한다(실측 — 120초 상한에서 첫 조회가 타임아웃). 그래서
+	 * 상한만 키우지 않고 첫 접촉 GET 을 되친다 — {@link #GET_ATTEMPTS} 참고.
 	 */
 	private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(120);
+
+	/**
+	 * GET 재시도 횟수. 콜드 스타트는 상한이 얼마든 가끔 넘기므로 상한을 키우는 대신 되친다 —
+	 * 되치는 사이 앱이 깨어나 다음 시도는 곧 응답한다. GET 만 되친다: 임포트 POST 가 서버에 닿은
+	 * 뒤 응답만 늦으면 되쳤을 때 기록이 둘이 된다 — 이 사이클이 막으려는 바로 그 중복이다.
+	 * 상한 120초 × 3 = 최악 6분으로 잡 상한 15분 안이다.
+	 */
+	private static final int GET_ATTEMPTS = 3;
 
 	private final HttpClient http = HttpClient.newBuilder()
 			.connectTimeout(Duration.ofSeconds(10))
@@ -65,7 +73,7 @@ public final class StudyLogClient implements StudyLog {
 	public String search(LocalDate from, LocalDate to, String keyword) {
 		String query = "?from=%s&to=%s&keyword=%s"
 				.formatted(from, to, URLEncoder.encode(keyword, StandardCharsets.UTF_8));
-		HttpResponse<String> response = send(
+		HttpResponse<String> response = getRetrying(
 				HttpRequest.newBuilder(URI.create(baseUrl + "/logs" + query)).GET(), "GET /logs");
 		require(response, 200, "GET /logs");
 		return response.body();
@@ -74,7 +82,7 @@ public final class StudyLogClient implements StudyLog {
 	@Override
 	public void login() {
 		HttpResponse<String> form =
-				send(HttpRequest.newBuilder(URI.create(baseUrl + "/login")).GET(), "GET /login");
+				getRetrying(HttpRequest.newBuilder(URI.create(baseUrl + "/login")).GET(), "GET /login");
 		require(form, 200, "GET /login");
 		String csrf = csrfToken(form.body());
 
@@ -82,7 +90,7 @@ public final class StudyLogClient implements StudyLog {
 				URLEncoder.encode(username, StandardCharsets.UTF_8),
 				URLEncoder.encode(password, StandardCharsets.UTF_8),
 				URLEncoder.encode(csrf, StandardCharsets.UTF_8));
-		HttpResponse<String> result = send(
+		HttpResponse<String> result = sendOnce(
 				HttpRequest.newBuilder(URI.create(baseUrl + "/login"))
 						.header("Content-Type", "application/x-www-form-urlencoded")
 						.POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)),
@@ -100,13 +108,13 @@ public final class StudyLogClient implements StudyLog {
 	@Override
 	public String importMarkdown(String fileName, String markdown) {
 		HttpResponse<String> form =
-				send(HttpRequest.newBuilder(URI.create(baseUrl + "/import")).GET(), "GET /import");
+				getRetrying(HttpRequest.newBuilder(URI.create(baseUrl + "/import")).GET(), "GET /import");
 		require(form, 200, "GET /import");
 		String csrf = csrfToken(form.body());
 
 		String boundary = "----dailylogbot" + Long.toHexString(System.nanoTime());
 		byte[] payload = multipart(boundary, csrf, fileName, markdown);
-		HttpResponse<String> result = send(
+		HttpResponse<String> result = sendOnce(
 				HttpRequest.newBuilder(URI.create(baseUrl + "/import"))
 						.header("Content-Type", "multipart/form-data; boundary=" + boundary)
 						.POST(HttpRequest.BodyPublishers.ofByteArray(payload)),
@@ -147,7 +155,7 @@ public final class StudyLogClient implements StudyLog {
 		return out.toByteArray();
 	}
 
-	private HttpResponse<String> send(HttpRequest.Builder request, String label) {
+	private HttpResponse<String> sendOnce(HttpRequest.Builder request, String label) {
 		try {
 			return http.send(
 					request.timeout(REQUEST_TIMEOUT).header("User-Agent", "daily-log-bot").build(),
@@ -158,6 +166,23 @@ public final class StudyLogClient implements StudyLog {
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException(label + " 중단", e);
 		}
+	}
+
+	/**
+	 * 콜드 스타트를 넘기려 GET 을 되친다. 타임아웃·연결 실패({@link UncheckedIOException})는 앱이
+	 * 아직 깨는 중이라는 신호라 다시 치고, 그 밖의 실패(잘못된 상태 코드 등)는 그대로 올린다.
+	 */
+	private HttpResponse<String> getRetrying(HttpRequest.Builder request, String label) {
+		UncheckedIOException last = null;
+		for (int attempt = 1; attempt <= GET_ATTEMPTS; attempt++) {
+			try {
+				return sendOnce(request, label);
+			} catch (UncheckedIOException e) {
+				last = e;
+			}
+		}
+		throw new IllegalStateException(
+				"%s — %d회 모두 응답 없음 (Render 콜드 스타트)".formatted(label, GET_ATTEMPTS), last);
 	}
 
 	/** 응답 본문은 붙이지 않는다 — 실패 화면이 커 로그를 덮고, 비밀번호를 실은 요청의 되울림이 섞일 수 있다. */
