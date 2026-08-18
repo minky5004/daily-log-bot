@@ -9,14 +9,17 @@ import com.minky.dailylogbot.collect.DayWindow;
 import com.minky.dailylogbot.collect.GitHubClient;
 import com.minky.dailylogbot.summarize.GeminiClient;
 import com.minky.dailylogbot.summarize.Summarizer;
+import com.minky.dailylogbot.upload.StudyLog;
+import com.minky.dailylogbot.upload.StudyLogClient;
+import com.minky.dailylogbot.upload.Uploader;
 
 import java.time.Clock;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 /**
- * 중복 방어 → 업로드가 이 자리에 사이클마다 하나씩 붙는다.
- * 지금 보이는 것은 어제 하루가 무슨 마크다운 한 장으로 접히는지까지다.
+ * 어제 하루를 모아 마크다운 한 장으로 접어 study-log 에 올리는 데까지가 지금 보이는 것이다.
+ * 남은 것은 이 실행을 자정마다 밟는 cron 활성화(7번)뿐이다.
  */
 public class DailyLogBot {
 
@@ -29,6 +32,13 @@ public class DailyLogBot {
 		// 요약 키를 수집 전에 확인한다. 뒤로 미루면 계정 전체를 다 돌고 나서야 키가 없다는 것을
 		// 알게 되고, 그 실행은 GitHub 호출만 태운 채 끝난다
 		Summarizer summarizer = new Summarizer(new GeminiClient(System.getenv("GEMINI_API_KEY")));
+
+		// study-log 시크릿도 수집 전에 확인한다. 뒤로 미루면 계정 전체를 다 돌고 요약까지 태운
+		// 뒤에야 자격이 없다는 것을 알게 된다
+		StudyLog studyLog = new StudyLogClient(
+				System.getenv("STUDYLOG_BASE_URL"),
+				System.getenv("STUDYLOG_USERNAME"),
+				System.getenv("STUDYLOG_PASSWORD"));
 
 		String login = github.get("/user", Map.of()).path("login").asText();
 		DayWindow window = DayWindow.yesterday(Clock.systemUTC());
@@ -43,7 +53,14 @@ public class DailyLogBot {
 		if (day.isEmpty()) {
 			return;
 		}
-		print(NoteAssembler.assemble(day, summarizer.summarize(day)));
+
+		TilNote note = NoteAssembler.assemble(day, summarizer.summarize(day));
+		print(note);
+
+		// 이미 있는 날은 건너뛴다 — 사용자가 아침에 end 를 고쳐 study-log 의 시각 키가 어긋나도
+		// 공개 목록으로 보는 판정이라 재실행이 기록을 둘로 만들지 않는다
+		boolean uploaded = new Uploader(studyLog).publish(note);
+		System.out.println(uploaded ? "study-log 에 올림" : "이미 있어 건너뜀");
 	}
 
 	/**
@@ -93,7 +110,7 @@ public class DailyLogBot {
 		}
 	}
 
-	/** 올릴 마크다운을 그대로 찍는다. 문을 통과하는 것은 업로드 사이클 몫이다. */
+	/** 올린 마크다운을 그대로 찍는다. public 실행 로그라 익명화를 통과한 것만 여기 온다. */
 	private static void print(TilNote note) {
 		System.out.printf("%n---- %s · %d자 ----%n%s", note.title(), note.markdown().length(), note.markdown());
 	}
