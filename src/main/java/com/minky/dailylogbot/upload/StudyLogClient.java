@@ -30,6 +30,13 @@ public final class StudyLogClient implements StudyLog {
 	private static final Pattern CSRF =
 			Pattern.compile("name=\"_csrf\"[^>]*value=\"([^\"]+)\"");
 
+	/**
+	 * 요청 하나의 상한. study-log 는 Render 무료 티어라 유휴 뒤 첫 요청이 앱을 깨우고, 그 콜드
+	 * 스타트가 30초를 넘긴다(실측 — 30초 상한에서 첫 조회가 타임아웃). 깨어난 뒤로는 빠르므로
+	 * 이 상한에 실제로 걸리는 것은 첫 호출뿐이다. 잡 상한 15분 안에 여러 콜드 스타트가 겹쳐도 남는다.
+	 */
+	private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(120);
+
 	private final HttpClient http = HttpClient.newBuilder()
 			.connectTimeout(Duration.ofSeconds(10))
 			// 로그인 성공은 302 라 자동으로 좇으면 상태를 볼 수 없다. 다른 호출은 200 직행이다
@@ -148,7 +155,7 @@ public final class StudyLogClient implements StudyLog {
 	private HttpResponse<String> send(HttpRequest.Builder request, String label) {
 		try {
 			return http.send(
-					request.timeout(Duration.ofSeconds(30)).header("User-Agent", "daily-log-bot").build(),
+					request.timeout(REQUEST_TIMEOUT).header("User-Agent", "daily-log-bot").build(),
 					HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
