@@ -2,20 +2,21 @@ package com.minky.dailylogbot;
 
 import com.minky.dailylogbot.anonymize.AnonymousDay;
 import com.minky.dailylogbot.anonymize.Anonymizer;
+import com.minky.dailylogbot.assemble.NoteAssembler;
+import com.minky.dailylogbot.assemble.TilNote;
 import com.minky.dailylogbot.collect.ActivityCollector;
 import com.minky.dailylogbot.collect.DayWindow;
 import com.minky.dailylogbot.collect.GitHubClient;
 import com.minky.dailylogbot.summarize.GeminiClient;
 import com.minky.dailylogbot.summarize.Summarizer;
-import com.minky.dailylogbot.summarize.TilDraft;
 
 import java.time.Clock;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 /**
- * 조립 → 중복 방어 → 업로드가 이 자리에 사이클마다 하나씩 붙는다.
- * 지금 보이는 것은 어제 하루가 요약을 통과한 뒤 무슨 초안이 되는지까지다.
+ * 중복 방어 → 업로드가 이 자리에 사이클마다 하나씩 붙는다.
+ * 지금 보이는 것은 어제 하루가 무슨 마크다운 한 장으로 접히는지까지다.
  */
 public class DailyLogBot {
 
@@ -42,7 +43,7 @@ public class DailyLogBot {
 		if (day.isEmpty()) {
 			return;
 		}
-		print(summarizer.summarize(day));
+		print(NoteAssembler.assemble(day, summarizer.summarize(day)));
 	}
 
 	/**
@@ -92,9 +93,8 @@ public class DailyLogBot {
 		}
 	}
 
-	/** 초안을 그대로 찍는다. 프론트매터로 접는 것은 조립 사이클 몫이다. */
-	private static void print(TilDraft draft) {
-		System.out.printf("%n---- 요약 (%d자) ----%n%s%n", draft.summary().length(), draft.summary());
-		System.out.printf("%n---- 본문 (%d자) ----%n%s%n", draft.body().length(), draft.body());
+	/** 올릴 마크다운을 그대로 찍는다. 문을 통과하는 것은 업로드 사이클 몫이다. */
+	private static void print(TilNote note) {
+		System.out.printf("%n---- %s · %d자 ----%n%s", note.title(), note.markdown().length(), note.markdown());
 	}
 }
