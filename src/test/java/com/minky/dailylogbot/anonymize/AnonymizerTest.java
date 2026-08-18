@@ -103,6 +103,7 @@ class AnonymizerTest {
 
 		assertTrue(day.isEmpty());
 		assertTrue(day.hidden().isEmpty());
+		assertEquals("", day.hidden().describe());
 	}
 
 	@Test

@@ -3,7 +3,6 @@ package com.minky.dailylogbot;
 import com.minky.dailylogbot.anonymize.AnonymousDay;
 import com.minky.dailylogbot.anonymize.Anonymizer;
 import com.minky.dailylogbot.collect.ActivityCollector;
-import com.minky.dailylogbot.collect.DailyActivity;
 import com.minky.dailylogbot.collect.DayWindow;
 import com.minky.dailylogbot.collect.GitHubClient;
 
@@ -25,9 +24,10 @@ public class DailyLogBot {
 		String login = github.get("/user", Map.of()).path("login").asText();
 
 		DayWindow window = DayWindow.yesterday(Clock.systemUTC());
-		DailyActivity activity = new ActivityCollector(github, login).collect(window);
 
-		print(login, window, Anonymizer.strip(activity));
+		// 수집 결과를 변수로 받지 않는다. 익명화 이전 값이 스코프에 남아 있으면 다음 사이클이
+		// 무심코 집어 갈 수 있는 자리가 되고, 그 순간 방어선이 한 자리라는 전제가 깨진다
+		print(login, window, Anonymizer.strip(new ActivityCollector(github, login).collect(window)));
 	}
 
 	/**

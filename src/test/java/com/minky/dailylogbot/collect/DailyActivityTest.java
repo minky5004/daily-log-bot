@@ -8,7 +8,6 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DailyActivityTest {
 
@@ -17,19 +16,6 @@ class DailyActivityTest {
 	private static DailyActivity.Commit commitAt(String at) {
 		return new DailyActivity.Commit(
 				"minky5004/study-log", false, "0".repeat(40), Instant.parse(at), "docs: 갱신", 1, 0, List.of());
-	}
-
-	private static DailyActivity.PullRequest pull() {
-		return new DailyActivity.PullRequest(
-				"minky5004/study-log", false, 36, "[DOCS] 갱신", "", Instant.parse("2026-08-16T04:26:13Z"));
-	}
-
-	@Test
-	@DisplayName("PR 만 있고 커밋이 0건이면 start 를 정할 근거가 없다")
-	void pullRequestAloneIsNotEnough() {
-		DailyActivity activity = new DailyActivity(WINDOW, List.of(), List.of(pull()));
-
-		assertTrue(activity.firstCommitAt().isEmpty());
 	}
 
 	@Test

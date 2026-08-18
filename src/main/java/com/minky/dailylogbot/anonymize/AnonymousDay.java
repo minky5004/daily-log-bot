@@ -42,8 +42,17 @@ public record AnonymousDay(
 			return repos == 0;
 		}
 
-		/** {@code 비공개 저장소 2곳 · 커밋 7건} 형태. 0인 항목은 빼서 없는 활동을 있는 척하지 않는다. */
+		/**
+		 * {@code 비공개 저장소 2곳 · 커밋 7건} 형태. 0인 항목은 빼서 없는 활동을 있는 척하지 않는다.
+		 *
+		 * <p>숨긴 것이 없으면 빈 문자열이다 — 요약과 본문이 같은 자리를 읽는데, 부르는 쪽마다
+		 * {@link #isEmpty()} 를 다시 확인해야 한다면 한 곳이 잊는 순간 {@code 비공개 저장소 0곳}
+		 * 이 기록에 실린다.
+		 */
 		public String describe() {
+			if (isEmpty()) {
+				return "";
+			}
 			StringBuilder sb = new StringBuilder("비공개 저장소 %d곳".formatted(repos));
 			if (commits > 0) {
 				sb.append(" · 커밋 %d건".formatted(commits));
