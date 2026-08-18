@@ -141,15 +141,10 @@ public final class StudyLogClient implements StudyLog {
 				.append("Content-Disposition: form-data; name=\"files\"; filename=\"")
 				.append(fileName).append("\"\r\n")
 				.append("Content-Type: text/markdown; charset=UTF-8\r\n\r\n");
-		writeUtf8(out, head.toString());
-		writeUtf8(out, markdown);
-		writeUtf8(out, "\r\n--" + boundary + "--\r\n");
+		out.writeBytes(head.toString().getBytes(StandardCharsets.UTF_8));
+		out.writeBytes(markdown.getBytes(StandardCharsets.UTF_8));
+		out.writeBytes(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
 		return out.toByteArray();
-	}
-
-	private static void writeUtf8(ByteArrayOutputStream out, String text) {
-		byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-		out.write(bytes, 0, bytes.length);
 	}
 
 	private HttpResponse<String> send(HttpRequest.Builder request, String label) {

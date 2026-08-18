@@ -70,6 +70,37 @@ class UploaderTest {
 		assertThrows(IllegalStateException.class, () -> new Uploader(fake).publish(NOTE));
 	}
 
+	/** 조회와 업로드 사이에 끼어든 기록을 서버가 건너뛰면 올린 것이 아니다 — 문은 두드렸어도. */
+	@Test
+	void 서버가_건너뛰면_올린_것이_아니다() {
+		Fake fake = new Fake(EMPTY_LISTING, SKIPPED_REPORT);
+
+		boolean uploaded = new Uploader(fake).publish(NOTE);
+
+		assertFalse(uploaded);
+		assertTrue(fake.loggedIn);
+		assertTrue(fake.imported);
+	}
+
+	/** 값을 자리로 읽으면 놓친다 — 실패가 표의 앞에 와도 라벨로 짚어 실패로 끝낸다. */
+	@Test
+	void 실패가_표의_앞에_와도_실패로_읽는다() {
+		Fake fake = new Fake(EMPTY_LISTING, REORDERED_FAIL_REPORT);
+
+		assertThrows(IllegalStateException.class, () -> new Uploader(fake).publish(NOTE));
+	}
+
+	/** session- 로 시작하는 뒷날의 클래스는 세션 한 줄이 아니다 — 제 업로드를 건너뛰지 않는다. */
+	@Test
+	void 세션_접두_클래스는_세션이_아니다() {
+		Fake fake = new Fake(SESSION_PREFIX_LISTING, ADDED_REPORT);
+
+		boolean uploaded = new Uploader(fake).publish(NOTE);
+
+		assertTrue(uploaded);
+		assertTrue(fake.loggedIn);
+	}
+
 	private static final String SESSION_LISTING = """
 			<ol class="day-list"><li class="day"><ol class="session-list">
 			<li class="session"><a href="/logs/7">2026-08-18 개발 기록</a></li>
@@ -78,6 +109,12 @@ class UploaderTest {
 	private static final String EMPTY_LISTING =
 			"""
 			<p class="empty">조건에 맞는 기록이 없습니다. 조건을 넓히거나 초기화해 보세요.</p>""";
+
+	/** 세션 목록 자리에 session- 접두 클래스만 있는 목록 — 세션 한 줄은 없다. */
+	private static final String SESSION_PREFIX_LISTING = """
+			<ol class="day-list"><li class="day"><ol class="session-list">
+			<li class="session-note">지난 메모</li>
+			</ol></li></ol>""";
 
 	private static final String ADDED_REPORT = """
 			<ul class="tally">
@@ -91,6 +128,24 @@ class UploaderTest {
 			<li><span class="tally-label">추가</span><span class="tally-value">0</span></li>
 			<li><span class="tally-label">건너뜀</span><span class="tally-value">0</span></li>
 			<li><span class="tally-label">실패</span><span class="tally-value">1</span></li>
+			</ul>
+			<table class="failures"><tbody>
+			<tr><td>2026-08-18.md</td><td>프론트매터 없음</td></tr>
+			</tbody></table>""";
+
+	private static final String SKIPPED_REPORT = """
+			<ul class="tally">
+			<li><span class="tally-label">추가</span><span class="tally-value">0</span></li>
+			<li><span class="tally-label">건너뜀</span><span class="tally-value">1</span></li>
+			<li><span class="tally-label">실패</span><span class="tally-value">0</span></li>
+			</ul>""";
+
+	/** 실패가 표의 첫 값으로 오는 배치 — 자리로 읽으면 추가로 오독한다. */
+	private static final String REORDERED_FAIL_REPORT = """
+			<ul class="tally">
+			<li><span class="tally-label">실패</span><span class="tally-value">1</span></li>
+			<li><span class="tally-label">추가</span><span class="tally-value">0</span></li>
+			<li><span class="tally-label">건너뜀</span><span class="tally-value">0</span></li>
 			</ul>
 			<table class="failures"><tbody>
 			<tr><td>2026-08-18.md</td><td>프론트매터 없음</td></tr>

@@ -15,12 +15,22 @@ import java.util.regex.Pattern;
  */
 public final class Uploader {
 
-	/** 목록 응답에서 세션 한 줄의 유무. 설계 7절이 「선택자에 묶이는 유일한 지점」이라 부른 곳이다. */
+	/**
+	 * 목록 응답에서 세션 한 줄의 유무. 설계 7절이 「선택자에 묶이는 유일한 지점」이라 부른 곳이다.
+	 *
+	 * <p>{@code session} 을 공백으로 나뉜 온전한 클래스 토큰으로만 본다 — {@code \\bsession\\b} 는
+	 * 하이픈도 단어 경계로 쳐 {@code class="session-note"} 같은 뒷날의 접두까지 걸리고, 그러면
+	 * 봇이 제 업로드를 영영 건너뛴다.
+	 */
 	private static final Pattern SESSION =
-			Pattern.compile("<li[^>]*\\bclass=\"[^\"]*\\bsession\\b[^\"]*\"");
+			Pattern.compile("<li[^>]*\\bclass=\"(?:[^\"]*\\s)?session(?:\\s[^\"]*)?\"");
 
-	/** 결과 표의 추가 · 건너뜀 · 실패 세 값이 이 순서로 나온다. */
-	private static final Pattern TALLY = Pattern.compile("class=\"tally-value\">(\\d+)<");
+	/**
+	 * 결과 표의 라벨과 값 쌍. 값만 자리로 읽으면 study-log 가 표 순서를 바꾸는 순간 추가와 실패가
+	 * 조용히 뒤바뀐다 — 옆의 라벨(추가 · 건너뜀 · 실패)로 짝지어 그 결합을 끊는다.
+	 */
+	private static final Pattern TALLY = Pattern.compile(
+			"class=\"tally-label\">([^<]+)</span>\\s*<span class=\"tally-value\">(\\d+)<");
 
 	/** 실패 표의 칸. 사유가 있어야 무엇을 고칠지 알 수 있다 — 건수만으로는 다시 올릴 수 없다. */
 	private static final Pattern CELL = Pattern.compile("<td>([^<]*)</td>");
@@ -32,8 +42,9 @@ public final class Uploader {
 	}
 
 	/**
-	 * 올렸으면 {@code true}, 이미 있어 건너뛰었으면 {@code false}. 업로드가 실패로 끝나면
-	 * 예외를 던져 워크플로를 실패로 세운다 — 설계 4절의 「실패는 워크플로를 실패로」 그대로다.
+	 * 서버가 실제로 새로 담았으면 {@code true}, 이미 있어 건너뛰었으면 {@code false} — 선조회로
+	 * 걸러진 날도, 조회와 업로드 사이에 끼어든 기록을 서버가 건너뛴 날도 같은 {@code false} 다.
+	 * 업로드가 실패로 끝나면 예외를 던져 워크플로를 실패로 세운다 — 설계 4절 그대로다.
 	 */
 	public boolean publish(TilNote note) {
 		String listing = studyLog.search(note.date(), note.date(), note.title());
@@ -42,36 +53,40 @@ public final class Uploader {
 		}
 
 		studyLog.login();
-		verify(studyLog.importMarkdown(note.date() + ".md", note.markdown()));
-		return true;
+		return stored(studyLog.importMarkdown(note.date() + ".md", note.markdown()));
 	}
 
 	/**
-	 * 결과 표를 읽어 실패면 던진다.
+	 * 결과 표를 읽어 실패면 던지고, 실제로 담겼는지를 돌려준다.
 	 *
 	 * <p>추가·건너뜀이 모두 0 이면 올렸는데 아무것도 안 들어간 것이라 성공이 아니다. 실패
 	 * 건수가 있으면 표의 사유를 메시지에 실어, 공개 실행 로그만 보고도 무엇이 틀렸는지 안다.
+	 * 건너뜀만 있는 날은 성공이되 새로 담은 것은 아니므로 {@code false} 로 알린다.
 	 */
-	private static void verify(String report) {
+	private static boolean stored(String report) {
 		Matcher tally = TALLY.matcher(report);
-		int[] counts = new int[3];
-		int seen = 0;
-		while (seen < 3 && tally.find()) {
-			counts[seen++] = Integer.parseInt(tally.group(1));
+		Integer added = null;
+		Integer skipped = null;
+		Integer failed = null;
+		while (tally.find()) {
+			int value = Integer.parseInt(tally.group(2));
+			switch (tally.group(1).strip()) {
+				case "추가" -> added = value;
+				case "건너뜀" -> skipped = value;
+				case "실패" -> failed = value;
+				default -> { }
+			}
 		}
-		if (seen < 3) {
+		if (added == null || skipped == null || failed == null) {
 			throw new IllegalStateException("study-log 업로드 결과를 읽지 못함 — " + report);
 		}
-
-		int added = counts[0];
-		int skipped = counts[1];
-		int failed = counts[2];
 		if (failed > 0) {
 			throw new IllegalStateException("study-log 업로드 실패 — " + reasons(report));
 		}
 		if (added == 0 && skipped == 0) {
 			throw new IllegalStateException("study-log 에 아무것도 들어가지 않음 — " + report);
 		}
+		return added > 0;
 	}
 
 	private static String reasons(String report) {
