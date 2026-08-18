@@ -5,14 +5,17 @@ import com.minky.dailylogbot.anonymize.Anonymizer;
 import com.minky.dailylogbot.collect.ActivityCollector;
 import com.minky.dailylogbot.collect.DayWindow;
 import com.minky.dailylogbot.collect.GitHubClient;
+import com.minky.dailylogbot.summarize.GeminiClient;
+import com.minky.dailylogbot.summarize.Summarizer;
+import com.minky.dailylogbot.summarize.TilDraft;
 
 import java.time.Clock;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 /**
- * 요약 → 조립 → 중복 방어 → 업로드가 이 자리에 사이클마다 하나씩 붙는다.
- * 지금 보이는 것은 어제 하루가 익명화를 통과한 뒤 무엇으로 남는지까지다.
+ * 조립 → 중복 방어 → 업로드가 이 자리에 사이클마다 하나씩 붙는다.
+ * 지금 보이는 것은 어제 하루가 요약을 통과한 뒤 무슨 초안이 되는지까지다.
  */
 public class DailyLogBot {
 
@@ -21,13 +24,25 @@ public class DailyLogBot {
 
 	public static void main(String[] args) {
 		GitHubClient github = new GitHubClient(System.getenv("GH_PAT"));
-		String login = github.get("/user", Map.of()).path("login").asText();
 
+		// 요약 키를 수집 전에 확인한다. 뒤로 미루면 계정 전체를 다 돌고 나서야 키가 없다는 것을
+		// 알게 되고, 그 실행은 GitHub 호출만 태운 채 끝난다
+		Summarizer summarizer = new Summarizer(new GeminiClient(System.getenv("GEMINI_API_KEY")));
+
+		String login = github.get("/user", Map.of()).path("login").asText();
 		DayWindow window = DayWindow.yesterday(Clock.systemUTC());
 
 		// 수집 결과를 변수로 받지 않는다. 익명화 이전 값이 스코프에 남아 있으면 다음 사이클이
 		// 무심코 집어 갈 수 있는 자리가 되고, 그 순간 방어선이 한 자리라는 전제가 깨진다
-		print(login, window, Anonymizer.strip(new ActivityCollector(github, login).collect(window)));
+		AnonymousDay day = Anonymizer.strip(new ActivityCollector(github, login).collect(window));
+		print(login, window, day);
+
+		// 설계 4절 — 커밋 0건인 날은 아무것도 올리지 않는다. 요약도 부르지 않는 것은 없는 하루를
+		// 넘기면 모델이 무엇이든 지어내기 때문이다. 빈 기록보다 지어낸 기록이 나쁘다
+		if (day.isEmpty()) {
+			return;
+		}
+		print(summarizer.summarize(day));
 	}
 
 	/**
@@ -75,5 +90,11 @@ public class DailyLogBot {
 		if (!hidden.isEmpty()) {
 			System.out.printf("%n  %s%n", hidden.describe());
 		}
+	}
+
+	/** 초안을 그대로 찍는다. 프론트매터로 접는 것은 조립 사이클 몫이다. */
+	private static void print(TilDraft draft) {
+		System.out.printf("%n---- 요약 (%d자) ----%n%s%n", draft.summary().length(), draft.summary());
+		System.out.printf("%n---- 본문 (%d자) ----%n%s%n", draft.body().length(), draft.body());
 	}
 }
