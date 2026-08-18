@@ -58,13 +58,25 @@ public final class GitHubClient {
 
 		if (response.statusCode() != 200) {
 			throw new IllegalStateException(
-					"GitHub %s → %d %s".formatted(path, response.statusCode(), response.body()));
+					"GitHub %s → %d %s".formatted(redact(path), response.statusCode(), response.body()));
 		}
 		try {
 			return mapper.readTree(response.body());
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}
+	}
+
+	/**
+	 * 실패 메시지에서 리포명을 지운다.
+	 *
+	 * <p>이 리포가 public 이라 실행 로그도 로그인 없이 열리는데, 실패는 잡지 않고 워크플로를
+	 * 끝내는 쪽이라 메시지가 그대로 그 로그에 남는다. 커밋마다 상세를 한 번씩 치는 흐름이라
+	 * 429 · 502 하나면 private 리포 경로가 90일 보존되는 공개 URL 에 박힌다. 남는 상태 코드와
+	 * 엔드포인트 종류만으로 원인은 가려진다.
+	 */
+	static String redact(String path) {
+		return path.replaceFirst("^/repos/[^/]+/[^/]+", "/repos/***");
 	}
 
 	/** 배열 응답을 끝까지 넘긴다. 리포 목록은 기본 30건이라 계정 전체가 한 장에 들어오지 않는다. */
