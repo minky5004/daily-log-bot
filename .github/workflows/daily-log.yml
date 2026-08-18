@@ -38,3 +38,6 @@ jobs:
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          STUDYLOG_BASE_URL: ${{ vars.STUDYLOG_BASE_URL }}
+          STUDYLOG_USERNAME: ${{ secrets.STUDYLOG_USERNAME }}
+          STUDYLOG_PASSWORD: ${{ secrets.STUDYLOG_PASSWORD }}
