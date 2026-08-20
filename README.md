@@ -2,7 +2,7 @@
 
 > 매일 자정 · 계정 전체의 그날 커밋과 PR 을 TIL 한 장으로 접어 [study-log](https://study-log-n6ez.onrender.com) 에 올리는 봇
 
-**산출물 — [2026-08-19 개발 기록](https://study-log-n6ez.onrender.com/logs/133)** · 배포된 화면이 아니라 매일 쌓이는 기록이 이 도구의 결과물
+**산출물 — [2026-08-19 개발 기록](https://study-log-n6ez.onrender.com/logs/133)** · 배포된 화면이 아니라 매일 쌓이는 기록이 이 도구의 결과물 · 무료 티어 · 첫 접속은 기동 대기 30초 안팎
 
 ![study-log 에 올라간 노트](docs/screenshots/note.png)
 
@@ -15,7 +15,7 @@
 | HTTP · JSON | JDK `HttpClient` · Jackson (프레임워크 없음 · 직접 의존 1개) |
 | 외부 | GitHub REST · Gemini `gemini-3.6-flash` 무료 티어 · study-log 폼 로그인과 `/import` |
 | 실행 주체 | GitHub Actions `schedule` cron |
-| Test | JUnit 5 · 46개 |
+| Test | JUnit 5 · 56개 |
 
 ## 실행
 
@@ -31,8 +31,7 @@ export STUDYLOG_USERNAME=... STUDYLOG_PASSWORD=...
 ```
 
 다섯 중 하나라도 누락 시 수집 전 중단 — 계정 전체를 다 돌고 나서야 키의 부재를 아는 실행은
-GitHub 호출만 태우고 끝나는 것. 툴체인 자동 프로비저닝은 미설정 — JDK 21 이 없는 머신은
-그보다 앞선 빌드에서 끊기는 자리.
+GitHub 호출만 태우고 끝나는 것.
 
 러너에서 밟는 통로.
 
