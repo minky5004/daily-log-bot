@@ -13,7 +13,7 @@ import java.util.Optional;
  */
 public record AnonymousDay(
 		LocalDate date,
-		Optional<Instant> firstCommitAt,
+		List<Instant> commitTimes,
 		List<Commit> commits,
 		List<PullRequest> pullRequests,
 		Hidden hidden) {
@@ -64,13 +64,18 @@ public record AnonymousDay(
 		}
 	}
 
+	/** 그날 첫 커밋 시각. 기록의 {@code start} 가 이 값이다. */
+	public Optional<Instant> firstCommitAt() {
+		return commitTimes.isEmpty() ? Optional.empty() : Optional.of(commitTimes.getFirst());
+	}
+
 	/**
 	 * 올릴 것이 없는 날인가.
 	 *
-	 * <p>첫 커밋 시각이 곧 기록의 {@code start} 라, 그 자리가 비었다는 것과 올릴 수 없다는 것이
-	 * 같은 말이다. private 커밋만 있던 날은 비어 있지 않다 — 내용은 앙상해도 시각은 실재한다.
+	 * <p>커밋 시각이 하나도 없다는 것과 올릴 수 없다는 것이 같은 말이다. private 커밋만 있던
+	 * 날은 비어 있지 않다 — 내용은 앙상해도 시각은 실재한다.
 	 */
 	public boolean isEmpty() {
-		return firstCommitAt.isEmpty();
+		return commitTimes.isEmpty();
 	}
 }

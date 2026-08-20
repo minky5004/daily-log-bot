@@ -9,7 +9,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -26,7 +25,7 @@ class SummarizerTest {
 			List<AnonymousDay.Commit> commits,
 			List<AnonymousDay.PullRequest> pulls,
 			AnonymousDay.Hidden hidden) {
-		return new AnonymousDay(DATE, Optional.of(COMMITTED), commits, pulls, hidden);
+		return new AnonymousDay(DATE, List.of(COMMITTED), commits, pulls, hidden);
 	}
 
 	private static AnonymousDay.Commit commit(List<String> files) {

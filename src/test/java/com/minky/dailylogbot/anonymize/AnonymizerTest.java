@@ -94,6 +94,28 @@ class AnonymizerTest {
 	}
 
 	@Test
+	@DisplayName("커밋 시각은 private 것까지 시간순으로 남는다 — 세션을 가르는 근거")
+	void commitTimesKeepPrivateOnes() {
+		DailyActivity activity =
+				new DailyActivity(
+						WINDOW,
+						List.of(
+								commit("minky5004/study-log", false, "2026-08-16T06:00:00Z"),
+								commit(SECRET_REPO, true, "2026-08-16T05:00:00Z"),
+								commit("minky5004/study-log", false, "2026-08-16T07:00:00Z")),
+						List.of());
+
+		AnonymousDay day = Anonymizer.strip(activity);
+
+		assertEquals(
+				List.of(
+						Instant.parse("2026-08-16T05:00:00Z"),
+						Instant.parse("2026-08-16T06:00:00Z"),
+						Instant.parse("2026-08-16T07:00:00Z")),
+				day.commitTimes());
+	}
+
+	@Test
 	@DisplayName("커밋이 0건이면 올릴 것 없는 날")
 	void noCommitsMeansEmptyDay() {
 		DailyActivity activity =

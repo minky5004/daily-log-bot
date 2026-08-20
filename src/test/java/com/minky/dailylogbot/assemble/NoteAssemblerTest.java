@@ -1,6 +1,7 @@
 package com.minky.dailylogbot.assemble;
 
 import com.minky.dailylogbot.anonymize.AnonymousDay;
+import com.minky.dailylogbot.collect.DayWindow;
 import com.minky.dailylogbot.summarize.TilDraft;
 
 import org.junit.jupiter.api.DisplayName;
@@ -8,8 +9,8 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -28,7 +29,11 @@ class NoteAssemblerTest {
 	private static AnonymousDay day(
 			Instant first, List<AnonymousDay.Commit> commits, List<AnonymousDay.PullRequest> pulls) {
 		return new AnonymousDay(
-				DATE, Optional.ofNullable(first), commits, pulls, new AnonymousDay.Hidden(0, 0, 0));
+				DATE,
+				first == null ? List.of() : List.of(first),
+				commits,
+				pulls,
+				new AnonymousDay.Hidden(0, 0, 0));
 	}
 
 	private static AnonymousDay.Commit commit(String repo) {
@@ -41,6 +46,19 @@ class NoteAssemblerTest {
 
 	private static AnonymousDay oneCommit() {
 		return day(FIRST, List.of(commit("minky5004/study-log")), List.of());
+	}
+
+	private static Instant kst(String hhmm) {
+		return DATE.atTime(LocalTime.parse(hhmm)).atZone(DayWindow.SEOUL).toInstant();
+	}
+
+	private static AnonymousDay dayOf(List<Instant> times) {
+		return new AnonymousDay(
+				DATE,
+				times,
+				List.of(commit("minky5004/study-log")),
+				List.of(),
+				new AnonymousDay.Hidden(0, 0, 0));
 	}
 
 	private static String markdown(AnonymousDay day, TilDraft draft) {
@@ -67,6 +85,20 @@ class NoteAssemblerTest {
 				- 문서 갱신
 				""",
 				md);
+	}
+
+	@Test
+	@DisplayName("end 는 start 에 세션 합을 더한 시각 — 자리에 없던 시간은 빠진다")
+	void endAddsWorkedMinutesOnly() {
+		// 커밋 8건. 09:58 과 13:19 사이 201분은 앉아 있던 시간이 아니라 합이 98 + 2 = 100분
+		String md = markdown(
+				dayOf(List.of(
+						kst("08:20"), kst("08:24"), kst("08:43"), kst("08:51"),
+						kst("08:59"), kst("09:58"), kst("13:19"), kst("13:21"))),
+				DRAFT);
+
+		assertTrue(md.contains("start: \"08:20\""));
+		assertTrue(md.contains("end: \"10:00\""));
 	}
 
 	@Test
@@ -125,7 +157,7 @@ class NoteAssemblerTest {
 	@DisplayName("public 활동이 없던 날의 태그는 빈 배열")
 	void noTags() {
 		AnonymousDay day = new AnonymousDay(
-				DATE, Optional.of(FIRST), List.of(), List.of(), new AnonymousDay.Hidden(1, 2, 0));
+				DATE, List.of(FIRST), List.of(), List.of(), new AnonymousDay.Hidden(1, 2, 0));
 
 		assertTrue(markdown(day, DRAFT).contains("tags: []"));
 	}
