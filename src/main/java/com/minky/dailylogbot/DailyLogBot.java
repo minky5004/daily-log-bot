@@ -18,8 +18,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 /**
- * 어제 하루를 모아 마크다운 한 장으로 접어 study-log 에 올리는 데까지가 지금 보이는 것이다.
- * 남은 것은 이 실행을 자정마다 밟는 cron 활성화(7번)뿐이다.
+ * 어제 하루를 모아 마크다운 한 장으로 접어 study-log 에 올린다.
+ * 이 실행을 자정마다 밟는 것은 {@code .github/workflows/daily-log.yml} 의 cron 이다.
  */
 public class DailyLogBot {
 
