@@ -19,7 +19,7 @@
 
 ## 실행
 
-실행 주체는 러너 — 로컬 실행은 검증 통로 · 시크릿 넷 · 변수 하나가 있어야 뜸.
+실행 주체는 러너 — 로컬 실행은 검증 통로 · 전제는 JDK 21 · 시크릿 넷 · 변수 하나.
 
 ```bash
 git clone https://github.com/minky5004/daily-log-bot.git && cd daily-log-bot
@@ -30,8 +30,9 @@ export STUDYLOG_USERNAME=... STUDYLOG_PASSWORD=...
 ./gradlew run                          # 어제 하루를 수집 → 요약 → 조립 → 업로드
 ```
 
-넷 중 하나라도 누락 시 수집 전 중단 — 계정 전체를 다 돌고 나서야 키의 부재를 아는 실행은
-GitHub 호출만 태우고 끝나는 것.
+다섯 중 하나라도 누락 시 수집 전 중단 — 계정 전체를 다 돌고 나서야 키의 부재를 아는 실행은
+GitHub 호출만 태우고 끝나는 것. 툴체인 자동 프로비저닝은 미설정 — JDK 21 이 없는 머신은
+그보다 앞선 빌드에서 끊기는 자리.
 
 러너에서 밟는 통로.
 
@@ -54,4 +55,4 @@ daily-log-bot/
 ```
 
 수집 · 요약 · 업로드 셋 다 얇은 전송(`GitHubClient` · `GeminiClient` · `StudyLogClient`)과 판단
-(`ActivityCollector` · `Summarizer` · `Uploader`)이 갈림 — 실제 호출 없는 판단 테스트를 위한 선.
+(`ActivityCollector` · `Summarizer` · `Uploader`)의 분리 — 실제 호출 없는 판단 테스트를 위한 선.
