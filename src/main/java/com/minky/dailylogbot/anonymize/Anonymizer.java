@@ -58,7 +58,7 @@ public final class Anonymizer {
 		// 하루가 둘로 부풀고, 그 수가 곧 요약에 들어가는 문장이다
 		return new AnonymousDay(
 				activity.window().date(),
-				activity.firstCommitAt(),
+				activity.commitTimes(),
 				List.copyOf(commits),
 				List.copyOf(pulls),
 				new AnonymousDay.Hidden(hiddenRepos.size(), hiddenCommits, hiddenPulls));

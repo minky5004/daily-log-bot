@@ -13,10 +13,21 @@ import java.util.Optional;
  */
 public record AnonymousDay(
 		LocalDate date,
-		Optional<Instant> firstCommitAt,
+		List<Instant> commitTimes,
 		List<Commit> commits,
 		List<PullRequest> pullRequests,
 		Hidden hidden) {
+
+	/**
+	 * {@code commitTimes} 는 시간순 · 불변이다.
+	 *
+	 * <p>{@link #firstCommitAt()} 이 첫 원소를 그대로 쓰고 세션 계산도 순서에 기대므로, 정렬을
+	 * 부르는 쪽의 규율로 두면 어긋난 하루가 조용히 틀린 {@code start} 를 만든다 — 뒤섞인 시각의
+	 * 음수 간격은 세션 합을 0으로 만들고, 0분을 1분으로 올리는 처리가 그것을 정상처럼 덮는다.
+	 */
+	public AnonymousDay {
+		commitTimes = commitTimes.stream().sorted().toList();
+	}
 
 	/** public 리포의 커밋. 코드 본문은 여기에도 오지 않는다 — 파일 경로와 증감 줄 수까지다. */
 	public record Commit(
@@ -64,13 +75,18 @@ public record AnonymousDay(
 		}
 	}
 
+	/** 그날 첫 커밋 시각. 기록의 {@code start} 가 이 값이다. */
+	public Optional<Instant> firstCommitAt() {
+		return commitTimes.isEmpty() ? Optional.empty() : Optional.of(commitTimes.getFirst());
+	}
+
 	/**
 	 * 올릴 것이 없는 날인가.
 	 *
-	 * <p>첫 커밋 시각이 곧 기록의 {@code start} 라, 그 자리가 비었다는 것과 올릴 수 없다는 것이
-	 * 같은 말이다. private 커밋만 있던 날은 비어 있지 않다 — 내용은 앙상해도 시각은 실재한다.
+	 * <p>커밋 시각이 하나도 없다는 것과 올릴 수 없다는 것이 같은 말이다. private 커밋만 있던
+	 * 날은 비어 있지 않다 — 내용은 앙상해도 시각은 실재한다.
 	 */
 	public boolean isEmpty() {
-		return firstCommitAt.isEmpty();
+		return commitTimes.isEmpty();
 	}
 }
