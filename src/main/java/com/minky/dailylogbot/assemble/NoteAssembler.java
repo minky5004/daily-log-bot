@@ -42,8 +42,9 @@ public final class NoteAssembler {
 				() -> new IllegalStateException("첫 커밋이 없는 날은 접을 수 없다 — " + day.date()));
 
 		LocalTime start = LocalTime.ofInstant(first, DayWindow.SEOUL).truncatedTo(ChronoUnit.MINUTES);
-		// 커밋 1건인 날은 앉아 있던 시간이 0분으로 나온다. study-log 가 start == end 를 거부해
-		// 그 하루가 통째로 반려되므로 1분으로 올린다 — 지어낸 값이 아니라 「실측 0」 의 표기다
+		// 세션이 전부 커밋 하나씩이면 합이 0분이다 — 커밋 1건인 날도, 종일 띄엄띄엄 하나씩
+		// 남긴 날도 여기 온다. study-log 가 start == end 를 거부해 그 하루가 통째로 반려되므로
+		// 1분으로 올린다 — 지어낸 값이 아니라 「실측 0」 의 표기다
 		int worked = Math.max(Sessions.workedMinutes(day.commitTimes()), 1);
 		String title = "%s 개발 기록".formatted(day.date());
 

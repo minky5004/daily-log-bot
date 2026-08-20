@@ -18,6 +18,17 @@ public record AnonymousDay(
 		List<PullRequest> pullRequests,
 		Hidden hidden) {
 
+	/**
+	 * {@code commitTimes} 는 시간순 · 불변이다.
+	 *
+	 * <p>{@link #firstCommitAt()} 이 첫 원소를 그대로 쓰고 세션 계산도 순서에 기대므로, 정렬을
+	 * 부르는 쪽의 규율로 두면 어긋난 하루가 조용히 틀린 {@code start} 를 만든다 — 뒤섞인 시각의
+	 * 음수 간격은 세션 합을 0으로 만들고, 0분을 1분으로 올리는 처리가 그것을 정상처럼 덮는다.
+	 */
+	public AnonymousDay {
+		commitTimes = commitTimes.stream().sorted().toList();
+	}
+
 	/** public 리포의 커밋. 코드 본문은 여기에도 오지 않는다 — 파일 경로와 증감 줄 수까지다. */
 	public record Commit(
 			String repo,

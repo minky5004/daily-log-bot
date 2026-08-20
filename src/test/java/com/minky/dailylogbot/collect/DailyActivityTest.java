@@ -19,14 +19,18 @@ class DailyActivityTest {
 	}
 
 	@Test
-	@DisplayName("커밋이 있으면 첫 커밋 시각이 start 자리")
-	void firstCommitIsTheEarliest() {
+	@DisplayName("커밋 시각은 받은 순서와 무관하게 시간순 — 맨 앞이 start 자리")
+	void commitTimesAreSortedEarliestFirst() {
 		DailyActivity activity =
 				new DailyActivity(
 						WINDOW,
 						List.of(commitAt("2026-08-16T06:40:13Z"), commitAt("2026-08-16T03:54:19Z")),
 						List.of());
 
-		assertEquals(Instant.parse("2026-08-16T03:54:19Z"), activity.firstCommitAt().orElseThrow());
+		assertEquals(
+				List.of(
+						Instant.parse("2026-08-16T03:54:19Z"),
+						Instant.parse("2026-08-16T06:40:13Z")),
+				activity.commitTimes());
 	}
 }
