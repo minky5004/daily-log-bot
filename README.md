@@ -2,7 +2,7 @@
 
 > 매일 자정 · 계정 전체의 그날 커밋과 PR 을 TIL 한 장으로 접어 [study-log](https://study-log-n6ez.onrender.com) 에 올리는 봇
 
-**산출물 — [2026-08-19 개발 기록](https://study-log-n6ez.onrender.com/logs/132)** · 배포된 화면이 아니라 매일 쌓이는 기록이 이 도구의 결과물
+**산출물 — [2026-08-19 개발 기록](https://study-log-n6ez.onrender.com/logs/133)** · 배포된 화면이 아니라 매일 쌓이는 기록이 이 도구의 결과물
 
 ![study-log 에 올라간 노트](docs/screenshots/note.png)
 
@@ -50,7 +50,7 @@ daily-log-bot/
     ├── collect/                      GitHub 조회 · KST 하루를 UTC 구간으로(DayWindow)
     ├── anonymize/                    private 세부 제거 — 이후 단계가 보는 유일한 입력
     ├── summarize/                    Gemini REST 호출 · 응답 검증(빈 값 · 상한 초과는 실행 실패)
-    ├── assemble/                     프론트매터 마크다운 조립 · 태그 · 시각
+    ├── assemble/                     세션 합산 · 프론트매터 마크다운 조립 · 태그
     └── upload/                       중복 선판정 · 폼 로그인 · _csrf 파싱 · multipart /import
 ```
 
