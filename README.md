@@ -6,13 +6,6 @@
 
 ![study-log 에 올라간 노트](docs/screenshots/note.png)
 
-study-log 를 만들고 남은 문제 — 기록 한 편의 값이 하루를 되짚는 수고. 그 되짚기의 재료는 이미
-커밋과 PR 에 전부 있어 자동화 대상. 사람 몫으로 남긴 것은 하나 — 아침에 `end` 를 실제 공부
-종료 시각으로 고치는 것. 화면의 `08:20–08:21 · 1분` 이 고치기 전 상태 · `start` 는 첫 커밋
-시각에서 딴 실측 · `end` 는 자리만 잡아 둔 값.
-
-study-log 는 한 줄도 고치지 않음 — 이미 뚫려 있는 `/import` 로만 들어가는 쪽.
-
 ## 기술 스택
 
 | 구분 | 기술 |
@@ -49,11 +42,15 @@ gh workflow run daily-log.yml --ref dev -R minky5004/daily-log-bot
 ## 구조
 
 ```
-collect/      GitHub 조회 · KST 하루를 UTC 구간으로(DayWindow) · 커밋/PR 수집
-anonymize/    private 세부 제거 — 이후 단계가 보는 유일한 입력
-summarize/    Gemini REST 호출 · 응답 검증(빈 값 · 상한 초과는 실행 실패)
-assemble/     프론트매터 마크다운 조립 · 태그 · 시각
-upload/       중복 선판정 · 폼 로그인 · `_csrf` 파싱 · multipart /import
+daily-log-bot/
+├── .github/workflows/daily-log.yml   KST 자정 cron · 되돌리기용 수동 실행
+└── src/main/java/com/minky/dailylogbot/
+    ├── DailyLogBot.java              진입점 — 수집 → 요약 → 조립 → 업로드
+    ├── collect/                      GitHub 조회 · KST 하루를 UTC 구간으로(DayWindow)
+    ├── anonymize/                    private 세부 제거 — 이후 단계가 보는 유일한 입력
+    ├── summarize/                    Gemini REST 호출 · 응답 검증(빈 값 · 상한 초과는 실행 실패)
+    ├── assemble/                     프론트매터 마크다운 조립 · 태그 · 시각
+    └── upload/                       중복 선판정 · 폼 로그인 · _csrf 파싱 · multipart /import
 ```
 
 수집 · 요약 · 업로드 셋 다 얇은 전송(`GitHubClient` · `GeminiClient` · `StudyLogClient`)과 판단
