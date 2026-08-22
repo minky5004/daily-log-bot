@@ -35,18 +35,29 @@ public final class Summarizer {
 	  사실 자체는 남긴다.
 	*/
 	private static final int MAX_FILES = 20;
-	private static final int MAX_TEXT = 500;
+
+	/*
+	  본문 상한. PR 본문은 `## 무엇을 / ## 어떻게 / ## 검증` 세 절이고 실측값은 마지막 절에
+	  있다 — 500자에서 자르면 판단만 남고 근거가 사라진다(실측 779~891자).
+	*/
+	private static final int MAX_TEXT = 1200;
 
 	private static final String RULES = """
 			너는 개발자의 하루 활동을 TIL 기록으로 옮기는 기록자다. 아래 활동만 근거로 삼는다.
 
 			규칙
-			- 목록에 없는 사실을 지어내지 않는다. 커밋 메시지 · PR 제목 · 파일 경로에서 읽히는 것까지만 쓴다
-			- 소감 · 다짐 · 학습 조언을 붙이지 않는다. 무엇을 했는지만 쓴다
+			- 목록에 없는 사실을 지어내지 않는다. 커밋 메시지 · PR 본문 · 파일 경로에 적힌 것까지만 쓴다
+			- 무엇을 했는지에 더해 왜 그렇게 했는지를 쓴다. 근거는 주어진 본문에서만 가져오고, 없으면 무엇을 했는지로 끝낸다
+			- 재료가 얕은 날은 짧게 끝낸다. 분량을 채우려고 같은 말을 다시 쓰거나 일반론을 붙이지 않는다
+			- 모든 문장을 `-다` 로 끝낸다 — `도입했다` `필요하다` 처럼 · `~합니다` `~함` `~음` 으로 끝내지 않는다
+			- 소감 · 다짐 · 학습 조언을 붙이지 않는다
 			- 비공개 활동은 주어진 집계 문장을 그대로 한 줄 적고 내용을 추측하지 않는다
 			- summary 는 한 문장 · 100자 이내 · 그날을 한 줄로 가리키는 말
-			- body 는 마크다운 · 저장소마다 `## 저장소명` · 그 아래 `-` 불릿 · 전체 1200자 이내
-			- 저장소 이름 · PR 번호는 있는 그대로 쓴다
+			- body 는 마크다운 · 저장소마다 `## 저장소명` · 그 아래 `-` 불릿 · 전체 2000자 이내
+			- 불릿 하나는 세 문장 안팎이다 — 무엇을 했는지 · 왜 그렇게 했는지 · 본문에 실측값이나 검증 결과가 있으면 그중 하나
+			- 불릿 끝에 괄호로 PR 링크만 단다 — 형태는 `([PR #번호](링크))` · 링크는 활동 목록 PR 절의 `링크:` 값을 그대로 옮긴다 · PR 이 없는 불릿은 괄호도 없다
+			- 증감 줄 수와 커밋 건수를 본문에 옮기지 않는다 — 여러 커밋을 한 불릿에 묶으며 더한 수는 틀린다 · 비공개 집계 문장은 예외로 그대로 쓴다
+			- 저장소 이름 · PR 번호 · 링크는 주어진 그대로 쓴다
 
 			활동
 			""";
@@ -108,8 +119,9 @@ public final class Summarizer {
 		if (!day.pullRequests().isEmpty()) {
 			sb.append("\nPR\n");
 			for (AnonymousDay.PullRequest pull : day.pullRequests()) {
-				sb.append("- %s#%d %s · %s\n".formatted(
-						pull.repo(), pull.number(), KST_TIME.format(pull.createdAt()), pull.title()));
+				sb.append("- %s#%d %s · %s\n  링크: %s\n".formatted(
+						pull.repo(), pull.number(), KST_TIME.format(pull.createdAt()), pull.title(),
+						"https://github.com/%s/pull/%d".formatted(pull.repo(), pull.number())));
 				if (pull.body() != null && !pull.body().isBlank()) {
 					sb.append("  %s\n".formatted(indent(clip(pull.body(), MAX_TEXT))));
 				}

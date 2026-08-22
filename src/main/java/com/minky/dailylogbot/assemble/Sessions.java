@@ -2,6 +2,7 @@ package com.minky.dailylogbot.assemble;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 /** 커밋 시각들을 실제로 앉아 있던 시간으로 접는다. */
@@ -23,21 +24,37 @@ public final class Sessions {
 	 * 기록이 실측이기를 그만둔다. 커밋 하나짜리 세션이 0분인 것도 같은 이유다.
 	 */
 	public static int workedMinutes(List<Instant> times) {
+		int minutes = 0;
+		for (Session session : split(times)) {
+			minutes += (int) Duration.between(session.start(), session.end()).toMinutes();
+		}
+		return minutes;
+	}
+
+	/** 한 번 앉은 구간. 첫 커밋과 마지막 커밋이다. */
+	record Session(Instant start, Instant end) {}
+
+	/**
+	 * 시간순 커밋 시각들을 앉아 있던 구간들로 가른다. {@link #workedMinutes} 가 세는 것이
+	 * 정확히 이 구간들의 길이 합이라, 둘이 같은 자리에서 갈린다.
+	 */
+	static List<Session> split(List<Instant> times) {
 		if (times.isEmpty()) {
-			return 0;
+			return List.of();
 		}
 
-		int minutes = 0;
+		List<Session> sessions = new ArrayList<>();
 		Instant sessionStart = times.getFirst();
 
 		for (int i = 1; i < times.size(); i++) {
 			Instant previous = times.get(i - 1);
 			if (Duration.between(previous, times.get(i)).compareTo(GAP) > 0) {
-				minutes += (int) Duration.between(sessionStart, previous).toMinutes();
+				sessions.add(new Session(sessionStart, previous));
 				sessionStart = times.get(i);
 			}
 		}
 
-		return minutes + (int) Duration.between(sessionStart, times.getLast()).toMinutes();
+		sessions.add(new Session(sessionStart, times.getLast()));
+		return List.copyOf(sessions);
 	}
 }

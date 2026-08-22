@@ -111,21 +111,21 @@ class SummarizerTest {
 	@DisplayName("커밋 메시지도 PR 본문과 같은 상한을 받는다")
 	void longCommitMessageIsClipped() {
 		AnonymousDay.Commit fat = new AnonymousDay.Commit(
-				"minky5004/study-log", COMMITTED, "머리\n" + "가".repeat(600), 1, 0, List.of("A.java"));
+				"minky5004/study-log", COMMITTED, "머리\n" + "가".repeat(1300), 1, 0, List.of("A.java"));
 
 		String prompt = Summarizer.prompt(
 				day(List.of(fat), List.of(), new AnonymousDay.Hidden(0, 0, 0)));
 
 		assertTrue(prompt.contains("머리"), prompt);
-		assertFalse(prompt.contains("가".repeat(600)), prompt);
+		assertFalse(prompt.contains("가".repeat(1300)), prompt);
 	}
 
 	@Test
 	@DisplayName("상한 경계에 이모지가 걸려도 반쪽짜리 문자를 남기지 않는다")
 	void clipKeepsSurrogatePairsWhole() {
 		String emoji = new String(Character.toChars(0x1F642));
-		// 이모지가 499~500번째 코드 유닛에 걸치게 만든다
-		String body = "가".repeat(499) + emoji + "나".repeat(10);
+		// 이모지가 1199~1200번째 코드 유닛에 걸치게 만든다
+		String body = "가".repeat(1199) + emoji + "나".repeat(10);
 
 		String prompt = Summarizer.prompt(
 				day(List.of(), List.of(pull(body)), new AnonymousDay.Hidden(0, 0, 0)));
@@ -175,5 +175,25 @@ class SummarizerTest {
 	@DisplayName("상한에 걸치는 요약은 통과한다")
 	void summaryAtTheLimitPasses() {
 		assertNull(Summarizer.brokenReason(new TilDraft("가".repeat(500), "본문")));
+	}
+
+	@Test
+	@DisplayName("PR 링크는 프롬프트가 완성형으로 준다 \u2014 모델이 번호를 조립하면 없는 PR 로 간다")
+	void promptCarriesPullRequestUrl() {
+		String prompt = Summarizer.prompt(
+				day(List.of(), List.of(pull("\uBCF8\uBB38")), new AnonymousDay.Hidden(0, 0, 0)));
+
+		assertTrue(prompt.contains("https://github.com/minky5004/study-log/pull/7"), prompt);
+	}
+
+	@Test
+	@DisplayName("PR 본문 뒤쪽의 「## 검증」 절도 실린다 \u2014 앞에서 자르면 실측값이 통째로 사라진다")
+	void promptKeepsVerificationSection() {
+		String body = "## \uC5B4\uB5BB\uAC8C\n" + "\uAC00".repeat(800) + "\n## \uAC80\uC99D\n\uD14C\uC2A4\uD2B8 259 \u2192 262";
+
+		String prompt = Summarizer.prompt(
+				day(List.of(), List.of(pull(body)), new AnonymousDay.Hidden(0, 0, 0)));
+
+		assertTrue(prompt.contains("\uD14C\uC2A4\uD2B8 259 \u2192 262"), prompt);
 	}
 }

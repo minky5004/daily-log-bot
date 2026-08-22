@@ -61,6 +61,11 @@ class NoteAssemblerTest {
 				new AnonymousDay.Hidden(0, 0, 0));
 	}
 
+	private static AnonymousDay.Commit sized(String repo, int additions, int deletions) {
+		return new AnonymousDay.Commit(
+				repo, FIRST, "fix: 경계값", additions, deletions, List.of("Form.java"));
+	}
+
 	private static String markdown(AnonymousDay day, TilDraft draft) {
 		return NoteAssembler.assemble(day, draft).markdown();
 	}
@@ -81,6 +86,8 @@ class NoteAssemblerTest {
 				tags: ["study-log"]
 				summary: "하루를 가리키는 한 줄"
 				---
+				커밋 1건 · +12 -3
+
 				## study-log
 				- 문서 갱신
 				""",
@@ -189,5 +196,66 @@ class NoteAssemblerTest {
 		AnonymousDay day = day(null, List.of(), List.of());
 
 		assertThrows(IllegalStateException.class, () -> NoteAssembler.assemble(day, DRAFT));
+	}
+
+	@Test
+	@DisplayName("본문 머리에 하루의 규모와 앉은 구간 — 산술을 모델에 맡기면 틀린 합이 기록에 남는다")
+	void 규모와_리듬을_코드가_센다() {
+		AnonymousDay day = new AnonymousDay(
+				DATE,
+				List.of(kst("13:14"), kst("13:31"), kst("14:49"), kst("15:08"),
+						kst("15:27"), kst("16:03"), kst("16:18"), kst("19:14"), kst("19:49")),
+				List.of(sized("minky5004/study-log", 201, 0), sized("minky5004/study-log", 141, 4)),
+				List.of(pull("minky5004/study-log")),
+				new AnonymousDay.Hidden(0, 0, 0));
+
+		assertTrue(markdown(day, DRAFT)
+				.contains("커밋 2건 · +342 -4 · PR 1건"));
+	}
+
+	@Test
+	@DisplayName("공개 커밋이 없는 날은 건수와 구간만 — 증감은 비공개에서 알 수 없다")
+	void 비공개만_있는_날은_증감_없이() {
+		AnonymousDay day = new AnonymousDay(
+				DATE,
+				List.of(kst("13:14"), kst("14:00")),
+				List.of(),
+				List.of(),
+				new AnonymousDay.Hidden(1, 2, 0));
+
+		String md = markdown(day, DRAFT);
+
+		assertTrue(md.contains("커밋 2건"), md);
+		assertFalse(md.contains("+0 -0"), md);
+	}
+
+	@Test
+	@DisplayName("규모 줄에 세션 구간을 싣지 않는다 — 프론트매터 end 는 합이라 실제 시각과 나란히 서면 어긋난다")
+	void 규모_줄에_구간은_없다() {
+		AnonymousDay day = new AnonymousDay(
+				DATE,
+				List.of(kst("13:14"), kst("16:18"), kst("19:14"), kst("19:49")),
+				List.of(sized("minky5004/study-log", 12, 3)),
+				List.of(),
+				new AnonymousDay.Hidden(0, 0, 0));
+
+		String md = markdown(day, DRAFT);
+
+		assertFalse(md.contains("19:49"), md);
+		assertFalse(md.contains("13:14~"), md);
+	}
+
+	@Test
+	@DisplayName("규모 줄의 커밋 건수는 비공개까지 센다 — 구간이 그 시각들로 그려지는데 건수만 공개분이면 분모가 갈린다")
+	void 커밋_건수는_비공개까지_센다() {
+		AnonymousDay day = new AnonymousDay(
+				DATE,
+				List.of(kst("09:00"), kst("09:30")),
+				List.of(sized("minky5004/study-log", 12, 3)),
+				List.of(),
+				new AnonymousDay.Hidden(1, 5, 0));
+
+		assertTrue(markdown(day, DRAFT).contains("커밋 6건 · +12 -3"),
+				markdown(day, DRAFT));
 	}
 }
