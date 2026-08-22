@@ -70,13 +70,22 @@ public final class NoteAssembler {
 	 * 실측처럼 보이는 자리에 남는다. 세션 구간도 같다 — {@link Sessions} 가 이미 가른 것을
 	 * 다시 세게 할 이유가 없다.
 	 *
-	 * <p>공개 커밋이 없는 날은 커밋 절을 통째로 뺀다. private 만 있던 날의 {@code 커밋 0건} 은
-	 * 없는 활동을 있는 척하는 표기이고, 그날 실재하는 것은 시각뿐이다.
+	 * <p>건수는 private 까지 센다. 옆에 붙는 구간이 private 커밋 시각으로도 그려져서, 건수만
+	 * 공개분이면 한 줄 안에서 분모가 갈린다 — 공개 2건 · 비공개 6건인 날이 {@code 커밋 2건 ·
+	 * 09:00~23:40} 이 되어 두 건이 14시간을 만든 것처럼 읽힌다. {@code DailyLogBot} 의 실행
+	 * 로그도 같은 합으로 찍는다.
+	 *
+	 * <p>증감만은 공개분이다. private 리포의 줄 수는 익명화가 떨어뜨려 셀 근거가 없고, 없는
+	 * 값을 0으로 적으면 {@code +0 -0} 이 실측처럼 남는다 — 그래서 공개 커밋이 없는 날은 증감
+	 * 자체를 뺀다.
 	 */
 	private static String scale(AnonymousDay day) {
 		List<String> parts = new ArrayList<>();
+		int commits = day.commits().size() + day.hidden().commits();
+		if (commits > 0) {
+			parts.add("커밋 %d건".formatted(commits));
+		}
 		if (!day.commits().isEmpty()) {
-			parts.add("커밋 %d건".formatted(day.commits().size()));
 			parts.add("+%d -%d".formatted(
 					day.commits().stream().mapToInt(AnonymousDay.Commit::additions).sum(),
 					day.commits().stream().mapToInt(AnonymousDay.Commit::deletions).sum()));

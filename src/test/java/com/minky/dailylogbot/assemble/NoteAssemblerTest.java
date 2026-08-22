@@ -214,8 +214,8 @@ class NoteAssemblerTest {
 	}
 
 	@Test
-	@DisplayName("공개 커밋이 없는 날은 앉은 구간만 — 「커밋 0건」 은 없는 활동을 있는 척한다")
-	void 비공개만_있는_날은_구간만() {
+	@DisplayName("공개 커밋이 없는 날은 건수와 구간만 — 증감은 비공개에서 알 수 없다")
+	void 비공개만_있는_날은_증감_없이() {
 		AnonymousDay day = new AnonymousDay(
 				DATE,
 				List.of(kst("13:14"), kst("14:00")),
@@ -225,8 +225,22 @@ class NoteAssemblerTest {
 
 		String md = markdown(day, DRAFT);
 
-		assertTrue(md.contains("13:14~14:00"));
-		assertFalse(md.contains("커밋 0건"));
+		assertTrue(md.contains("커밋 2건 · 13:14~14:00"), md);
+		assertFalse(md.contains("+0 -0"), md);
+	}
+
+	@Test
+	@DisplayName("규모 줄의 커밋 건수는 비공개까지 센다 — 구간이 그 시각들로 그려지는데 건수만 공개분이면 분모가 갈린다")
+	void 커밋_건수는_비공개까지_센다() {
+		AnonymousDay day = new AnonymousDay(
+				DATE,
+				List.of(kst("09:00"), kst("09:30")),
+				List.of(sized("minky5004/study-log", 12, 3)),
+				List.of(),
+				new AnonymousDay.Hidden(1, 5, 0));
+
+		assertTrue(markdown(day, DRAFT).contains("커밋 6건 · +12 -3 · 09:00~09:30"),
+				markdown(day, DRAFT));
 	}
 
 	@Test
