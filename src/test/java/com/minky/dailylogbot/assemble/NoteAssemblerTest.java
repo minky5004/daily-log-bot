@@ -86,7 +86,7 @@ class NoteAssemblerTest {
 				tags: ["study-log"]
 				summary: "하루를 가리키는 한 줄"
 				---
-				커밋 1건 · +12 -3 · 09:12
+				커밋 1건 · +12 -3
 
 				## study-log
 				- 문서 갱신
@@ -210,7 +210,7 @@ class NoteAssemblerTest {
 				new AnonymousDay.Hidden(0, 0, 0));
 
 		assertTrue(markdown(day, DRAFT)
-				.contains("커밋 2건 · +342 -4 · PR 1건 · 13:14~16:18 · 19:14~19:49"));
+				.contains("커밋 2건 · +342 -4 · PR 1건"));
 	}
 
 	@Test
@@ -225,8 +225,24 @@ class NoteAssemblerTest {
 
 		String md = markdown(day, DRAFT);
 
-		assertTrue(md.contains("커밋 2건 · 13:14~14:00"), md);
+		assertTrue(md.contains("커밋 2건"), md);
 		assertFalse(md.contains("+0 -0"), md);
+	}
+
+	@Test
+	@DisplayName("규모 줄에 세션 구간을 싣지 않는다 — 프론트매터 end 는 합이라 실제 시각과 나란히 서면 어긋난다")
+	void 규모_줄에_구간은_없다() {
+		AnonymousDay day = new AnonymousDay(
+				DATE,
+				List.of(kst("13:14"), kst("16:18"), kst("19:14"), kst("19:49")),
+				List.of(sized("minky5004/study-log", 12, 3)),
+				List.of(),
+				new AnonymousDay.Hidden(0, 0, 0));
+
+		String md = markdown(day, DRAFT);
+
+		assertFalse(md.contains("19:49"), md);
+		assertFalse(md.contains("13:14~"), md);
 	}
 
 	@Test
@@ -239,23 +255,7 @@ class NoteAssemblerTest {
 				List.of(),
 				new AnonymousDay.Hidden(1, 5, 0));
 
-		assertTrue(markdown(day, DRAFT).contains("커밋 6건 · +12 -3 · 09:00~09:30"),
+		assertTrue(markdown(day, DRAFT).contains("커밋 6건 · +12 -3"),
 				markdown(day, DRAFT));
-	}
-
-	@Test
-	@DisplayName("커밋 하나뿐인 세션은 시각 하나로 — 09:12~09:12 은 구간이 아니다")
-	void 커밋_하나짜리_세션은_시각_하나() {
-		AnonymousDay day = new AnonymousDay(
-				DATE,
-				List.of(kst("09:12"), kst("13:00")),
-				List.of(sized("minky5004/study-log", 3, 1)),
-				List.of(),
-				new AnonymousDay.Hidden(0, 0, 0));
-
-		String md = markdown(day, DRAFT);
-
-		assertTrue(md.contains("09:12 \u00b7 13:00"));
-		assertFalse(md.contains("09:12~09:12"));
 	}
 }

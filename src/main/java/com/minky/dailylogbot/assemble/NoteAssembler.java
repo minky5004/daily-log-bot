@@ -64,11 +64,16 @@ public final class NoteAssembler {
 	}
 
 	/**
-	 * 본문 머리의 규모 한 줄 — {@code 커밋 2건 · +342 -4 · PR 1건 · 13:14~16:18 · 19:14~19:49}.
+	 * 본문 머리의 규모 한 줄 — {@code 커밋 2건 · +342 -4 · PR 1건}.
 	 *
 	 * <p>산술을 요약 모델에 맡기지 않는다. 합계를 시키면 틀린 수를 자신 있게 적고, 그것이
-	 * 실측처럼 보이는 자리에 남는다. 세션 구간도 같다 — {@link Sessions} 가 이미 가른 것을
-	 * 다시 세게 할 이유가 없다.
+	 * 실측처럼 보이는 자리에 남는다.
+	 *
+	 * <p>앉아 있던 구간은 싣지 않는다. 프론트매터 {@code end} 는 실제 시각이 아니라
+	 * {@code start + 앉은 시간 합} 이라, 진짜 시각을 옆에 세우면 한 노트가 두 시각을 말한다 —
+	 * {@code end: "16:51"} 아래에 {@code 19:14~19:49} 가 서는 식이다. 실제 종료 시각을 쓰려면
+	 * study-log 의 duration 이 공백까지 세는 통짜가 되므로, 그 선택은 {@link Sessions} 를 들인
+	 * 사이클이 이미 반대쪽으로 정했다.
 	 *
 	 * <p>건수는 private 까지 센다. 옆에 붙는 구간이 private 커밋 시각으로도 그려져서, 건수만
 	 * 공개분이면 한 줄 안에서 분모가 갈린다 — 공개 2건 · 비공개 6건인 날이 {@code 커밋 2건 ·
@@ -93,23 +98,9 @@ public final class NoteAssembler {
 		if (!day.pullRequests().isEmpty()) {
 			parts.add("PR %d건".formatted(day.pullRequests().size()));
 		}
-		Sessions.split(day.commitTimes()).forEach(session -> parts.add(range(session)));
 		return String.join(" · ", parts) + "\n\n";
 	}
 
-	/**
-	 * 세션 하나의 표기. 커밋 하나뿐인 세션은 시각 하나로 적는다 — {@code 09:12~09:12} 은
-	 * 구간이 아니라 같은 값을 두 번 쓴 것이고, 앉아 있던 길이를 모른다는 사실만 흐린다.
-	 */
-	private static String range(Sessions.Session session) {
-		String start = minute(session.start());
-		String end = minute(session.end());
-		return start.equals(end) ? start : "%s~%s".formatted(start, end);
-	}
-
-	private static String minute(Instant at) {
-		return TIME.format(LocalTime.ofInstant(at, DayWindow.SEOUL).truncatedTo(ChronoUnit.MINUTES));
-	}
 
 	/**
 	 * 태그는 그날 손댄 public 리포 이름들. 소유자 접두는 뗀다 — 계정 하나만 보는 도구라

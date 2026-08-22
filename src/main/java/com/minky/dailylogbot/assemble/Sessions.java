@@ -32,13 +32,13 @@ public final class Sessions {
 	}
 
 	/** 한 번 앉은 구간. 첫 커밋과 마지막 커밋이다. */
-	public record Session(Instant start, Instant end) {}
+	record Session(Instant start, Instant end) {}
 
 	/**
 	 * 시간순 커밋 시각들을 앉아 있던 구간들로 가른다. {@link #workedMinutes} 가 세는 것이
 	 * 정확히 이 구간들의 길이 합이라, 둘이 같은 자리에서 갈린다.
 	 */
-	public static List<Session> split(List<Instant> times) {
+	static List<Session> split(List<Instant> times) {
 		if (times.isEmpty()) {
 			return List.of();
 		}
