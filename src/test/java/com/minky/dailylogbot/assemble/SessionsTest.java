@@ -62,4 +62,24 @@ class SessionsTest {
 	void 빈_날은_0분() {
 		assertEquals(0, Sessions.workedMinutes(List.of()));
 	}
+
+	@Test
+	@DisplayName("긴 공백이 하루를 두 번 앉은 것으로 가른다 — 세션마다 첫 커밋과 마지막 커밋")
+	void 세션_목록은_공백에서_갈린다() {
+		// 실측 2026-08-21 의 커밋 시각. 16:18 과 19:14 사이 176분에서 갈린다
+		List<Instant> times = List.of(
+				kst("13:14"), kst("13:31"), kst("14:49"), kst("16:18"),
+				kst("19:14"), kst("19:49"));
+
+		assertEquals(
+				List.of(new Sessions.Session(kst("13:14"), kst("16:18")),
+						new Sessions.Session(kst("19:14"), kst("19:49"))),
+				Sessions.split(times));
+	}
+
+	@Test
+	@DisplayName("커밋이 없으면 세션도 없다")
+	void 빈_날은_세션_없음() {
+		assertEquals(List.of(), Sessions.split(List.of()));
+	}
 }

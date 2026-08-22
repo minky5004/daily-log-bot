@@ -61,6 +61,11 @@ class NoteAssemblerTest {
 				new AnonymousDay.Hidden(0, 0, 0));
 	}
 
+	private static AnonymousDay.Commit sized(String repo, int additions, int deletions) {
+		return new AnonymousDay.Commit(
+				repo, FIRST, "fix: 경계값", additions, deletions, List.of("Form.java"));
+	}
+
 	private static String markdown(AnonymousDay day, TilDraft draft) {
 		return NoteAssembler.assemble(day, draft).markdown();
 	}
@@ -81,6 +86,8 @@ class NoteAssemblerTest {
 				tags: ["study-log"]
 				summary: "하루를 가리키는 한 줄"
 				---
+				커밋 1건 · +12 -3 · 09:12
+
 				## study-log
 				- 문서 갱신
 				""",
@@ -189,5 +196,52 @@ class NoteAssemblerTest {
 		AnonymousDay day = day(null, List.of(), List.of());
 
 		assertThrows(IllegalStateException.class, () -> NoteAssembler.assemble(day, DRAFT));
+	}
+
+	@Test
+	@DisplayName("본문 머리에 하루의 규모와 앉은 구간 — 산술을 모델에 맡기면 틀린 합이 기록에 남는다")
+	void 규모와_리듬을_코드가_센다() {
+		AnonymousDay day = new AnonymousDay(
+				DATE,
+				List.of(kst("13:14"), kst("13:31"), kst("14:49"), kst("15:08"),
+						kst("15:27"), kst("16:03"), kst("16:18"), kst("19:14"), kst("19:49")),
+				List.of(sized("minky5004/study-log", 201, 0), sized("minky5004/study-log", 141, 4)),
+				List.of(pull("minky5004/study-log")),
+				new AnonymousDay.Hidden(0, 0, 0));
+
+		assertTrue(markdown(day, DRAFT)
+				.contains("커밋 2건 · +342 -4 · PR 1건 · 13:14~16:18 · 19:14~19:49"));
+	}
+
+	@Test
+	@DisplayName("공개 커밋이 없는 날은 앉은 구간만 — 「커밋 0건」 은 없는 활동을 있는 척한다")
+	void 비공개만_있는_날은_구간만() {
+		AnonymousDay day = new AnonymousDay(
+				DATE,
+				List.of(kst("13:14"), kst("14:00")),
+				List.of(),
+				List.of(),
+				new AnonymousDay.Hidden(1, 2, 0));
+
+		String md = markdown(day, DRAFT);
+
+		assertTrue(md.contains("13:14~14:00"));
+		assertFalse(md.contains("커밋 0건"));
+	}
+
+	@Test
+	@DisplayName("커밋 하나뿐인 세션은 시각 하나로 — 09:12~09:12 은 구간이 아니다")
+	void 커밋_하나짜리_세션은_시각_하나() {
+		AnonymousDay day = new AnonymousDay(
+				DATE,
+				List.of(kst("09:12"), kst("13:00")),
+				List.of(sized("minky5004/study-log", 3, 1)),
+				List.of(),
+				new AnonymousDay.Hidden(0, 0, 0));
+
+		String md = markdown(day, DRAFT);
+
+		assertTrue(md.contains("09:12 \u00b7 13:00"));
+		assertFalse(md.contains("09:12~09:12"));
 	}
 }

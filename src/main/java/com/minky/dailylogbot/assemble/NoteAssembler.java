@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.SequencedSet;
@@ -57,9 +58,48 @@ public final class NoteAssembler {
 		quoted(md, "category", CATEGORY);
 		md.append("tags: ").append(tagArray(tags(day))).append('\n');
 		quoted(md, "summary", oneLine(draft.summary()));
-		md.append(DELIMITER).append(draft.body()).append('\n');
+		md.append(DELIMITER).append(scale(day)).append(draft.body()).append('\n');
 
 		return new TilNote(title, day.date(), md.toString());
+	}
+
+	/**
+	 * 본문 머리의 규모 한 줄 — {@code 커밋 2건 · +342 -4 · PR 1건 · 13:14~16:18 · 19:14~19:49}.
+	 *
+	 * <p>산술을 요약 모델에 맡기지 않는다. 합계를 시키면 틀린 수를 자신 있게 적고, 그것이
+	 * 실측처럼 보이는 자리에 남는다. 세션 구간도 같다 — {@link Sessions} 가 이미 가른 것을
+	 * 다시 세게 할 이유가 없다.
+	 *
+	 * <p>공개 커밋이 없는 날은 커밋 절을 통째로 뺀다. private 만 있던 날의 {@code 커밋 0건} 은
+	 * 없는 활동을 있는 척하는 표기이고, 그날 실재하는 것은 시각뿐이다.
+	 */
+	private static String scale(AnonymousDay day) {
+		List<String> parts = new ArrayList<>();
+		if (!day.commits().isEmpty()) {
+			parts.add("커밋 %d건".formatted(day.commits().size()));
+			parts.add("+%d -%d".formatted(
+					day.commits().stream().mapToInt(AnonymousDay.Commit::additions).sum(),
+					day.commits().stream().mapToInt(AnonymousDay.Commit::deletions).sum()));
+		}
+		if (!day.pullRequests().isEmpty()) {
+			parts.add("PR %d건".formatted(day.pullRequests().size()));
+		}
+		Sessions.split(day.commitTimes()).forEach(session -> parts.add(range(session)));
+		return String.join(" · ", parts) + "\n\n";
+	}
+
+	/**
+	 * 세션 하나의 표기. 커밋 하나뿐인 세션은 시각 하나로 적는다 — {@code 09:12~09:12} 은
+	 * 구간이 아니라 같은 값을 두 번 쓴 것이고, 앉아 있던 길이를 모른다는 사실만 흐린다.
+	 */
+	private static String range(Sessions.Session session) {
+		String start = minute(session.start());
+		String end = minute(session.end());
+		return start.equals(end) ? start : "%s~%s".formatted(start, end);
+	}
+
+	private static String minute(Instant at) {
+		return TIME.format(LocalTime.ofInstant(at, DayWindow.SEOUL).truncatedTo(ChronoUnit.MINUTES));
 	}
 
 	/**
