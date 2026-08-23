@@ -20,6 +20,13 @@ on:
 permissions:
   contents: read
 
+# 발화가 둘이 된 뒤로 크게 밀린 1차와 백업이 나란히 뜰 수 있다. study-log 의 중복 판정은
+# 읽고 나서 넣는 두 걸음이라(NoteWriter 의 existsBy... 뒤 저장) 둘이 같이 통과하면 같은 하루가
+# 기록 둘이 된다 — 앞선 실행을 죽이지 않고 줄을 세운다
+concurrency:
+  group: daily-log
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest
