@@ -15,6 +15,13 @@ on:
     - cron: '37 16 * * *'
   # 실패한 날 되돌리기 · 사이클마다 러너를 밟는 수동 통로
   workflow_dispatch:
+    inputs:
+      dry_run:
+        # 이미 올라간 날은 요약 앞 판정이 끊어 마크다운이 만들어지지 않는다. 본문 형식을
+        # 고치는 사이클의 검증 통로가 그 출력뿐이라, 판정과 업로드만 건너뛰는 실행을 둔다
+        description: '올리지 않고 마크다운만 찍는다 — 본문 형식 · 문체 확인용'
+        type: boolean
+        default: false
 
 # 하는 일은 소스 읽기와 외부 호출뿐. 기본값은 리포 설정에 따라 쓰기까지 열린다
 permissions:
@@ -59,3 +66,5 @@ jobs:
           STUDYLOG_BASE_URL: ${{ vars.STUDYLOG_BASE_URL }}
           STUDYLOG_USERNAME: ${{ secrets.STUDYLOG_USERNAME }}
           STUDYLOG_PASSWORD: ${{ secrets.STUDYLOG_PASSWORD }}
+          # schedule 발화에는 inputs 가 없어 빈 문자열이 온다 — 켜지는 것은 사람이 켠 실행뿐
+          DRY_RUN: ${{ inputs.dry_run }}
