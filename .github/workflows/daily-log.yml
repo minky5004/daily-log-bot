@@ -1,5 +1,9 @@
 name: daily-log
 
+# dry-run 은 아무것도 올리지 않고 초록으로 끝난다 — 목록에서 발행과 같은 줄로 보이면
+# 「어제치는 올라갔나」를 실행 목록으로 답할 수 없다
+run-name: daily-log${{ inputs.dry_run == true && ' (dry-run)' || '' }}
+
 on:
   # KST 자정 무렵(15:07 UTC). 정각을 피하는 것은 매시 정각이 액션 예약의 가장 혼잡한 슬롯이라
   # 지연·드롭이 잦기 때문 — 대상이 "어제" 라 몇 분 밀려도 수집 창이 같아, 오프셋은 발화 신뢰도만
@@ -15,6 +19,13 @@ on:
     - cron: '37 16 * * *'
   # 실패한 날 되돌리기 · 사이클마다 러너를 밟는 수동 통로
   workflow_dispatch:
+    inputs:
+      dry_run:
+        # 이미 올라간 날은 요약 앞 판정이 끊어 마크다운이 만들어지지 않는다. 본문 형식을
+        # 고치는 사이클의 검증 통로가 그 출력뿐이라, 판정과 업로드만 건너뛰는 실행을 둔다
+        description: '올리지 않고 마크다운만 찍는다 — 본문 형식 · 문체 확인용'
+        type: boolean
+        default: false
 
 # 하는 일은 소스 읽기와 외부 호출뿐. 기본값은 리포 설정에 따라 쓰기까지 열린다
 permissions:
@@ -22,9 +33,12 @@ permissions:
 
 # 발화가 둘이 된 뒤로 크게 밀린 1차와 백업이 나란히 뜰 수 있다. study-log 의 중복 판정은
 # 읽고 나서 넣는 두 걸음이라(NoteWriter 의 existsBy... 뒤 저장) 둘이 같이 통과하면 같은 하루가
-# 기록 둘이 된다 — 앞선 실행을 죽이지 않고 줄을 세운다
+# 기록 둘이 된다 — 앞선 실행을 죽이지 않고 줄을 세운다.
+# dry-run 만 제 실행 번호로 빠지는 것은 대기 중인 발행을 밀어내지 않기 위해서다: 한 그룹에서
+# 대기할 수 있는 것은 하나뿐이라, 형식을 고치며 연달아 띄우는 dry-run 이 그 자리의 예약 발행을
+# 취소한다. 아무것도 쓰지 않는 실행이라 발행과 나란히 돌아도 무해하다
 concurrency:
-  group: daily-log
+  group: daily-log-${{ inputs.dry_run == true && github.run_id || 'publish' }}
   cancel-in-progress: false
 
 jobs:
@@ -59,3 +73,5 @@ jobs:
           STUDYLOG_BASE_URL: ${{ vars.STUDYLOG_BASE_URL }}
           STUDYLOG_USERNAME: ${{ secrets.STUDYLOG_USERNAME }}
           STUDYLOG_PASSWORD: ${{ secrets.STUDYLOG_PASSWORD }}
+          # schedule 발화에는 inputs 가 없어 빈 문자열이 온다 — 켜지는 것은 사람이 켠 실행뿐
+          DRY_RUN: ${{ inputs.dry_run }}
