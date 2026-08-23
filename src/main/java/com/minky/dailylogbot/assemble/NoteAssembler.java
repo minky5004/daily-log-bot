@@ -5,6 +5,7 @@ import com.minky.dailylogbot.collect.DayWindow;
 import com.minky.dailylogbot.summarize.TilDraft;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -36,6 +37,16 @@ public final class NoteAssembler {
 
 	private NoteAssembler() {}
 
+	/**
+	 * 그날 기록의 제목. study-log 중복 판정 키의 절반이라 짓는 규칙이 여기 한 곳에만 있다 —
+	 * 조회하는 쪽이 제 손으로 같은 문자열을 만들면 둘이 갈리는 날 같은 하루가 기록 둘이 된다.
+	 *
+	 * <p>요약을 부르기 전에 「이미 올라간 날인가」를 물으려면 초안 없이 제목이 필요해서 갈랐다.
+	 */
+	public static String title(LocalDate date) {
+		return "%s 개발 기록".formatted(date);
+	}
+
 	public static TilNote assemble(AnonymousDay day, TilDraft draft) {
 		// 부르는 쪽이 이미 커밋 0건인 날을 끊지만, 없는 시각을 지어내느니 여기서도 끝낸다.
 		// start 는 실제로 있었던 시각이라는 것이 이 기록의 유일한 근거다
@@ -47,7 +58,7 @@ public final class NoteAssembler {
 		// 남긴 날도 여기 온다. study-log 가 start == end 를 거부해 그 하루가 통째로 반려되므로
 		// 1분으로 올린다 — 지어낸 값이 아니라 「실측 0」 의 표기다
 		int worked = Math.max(Sessions.workedMinutes(day.commitTimes()), 1);
-		String title = "%s 개발 기록".formatted(day.date());
+		String title = title(day.date());
 
 		StringBuilder md = new StringBuilder(DELIMITER);
 		quoted(md, "title", title);

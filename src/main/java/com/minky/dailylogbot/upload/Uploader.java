@@ -1,7 +1,9 @@
 package com.minky.dailylogbot.upload;
 
+import com.minky.dailylogbot.assemble.NoteAssembler;
 import com.minky.dailylogbot.assemble.TilNote;
 
+import java.time.LocalDate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,13 +44,24 @@ public final class Uploader {
 	}
 
 	/**
+	 * 그날 기록이 study-log 에 이미 있는가. 조립 이전에 물을 수 있게 갈라 둔 것은 백업 발화
+	 * 때문이다 — 1차가 성공한 날에도 요약까지 다 돌고 나서 건너뛰면 무료 티어 호출이 하루 두
+	 * 번이 되고, 503 을 덮으려고 둔 발화가 503 을 맞을 자리를 하나 더 만든다.
+	 *
+	 * <p>제목은 {@link NoteAssembler#title} 에서 가져온다. 같은 문자열을 여기서 다시 지으면
+	 * 둘이 갈리는 날 판정이 통째로 헛돈다.
+	 */
+	public boolean alreadyPublished(LocalDate date) {
+		return SESSION.matcher(studyLog.search(date, date, NoteAssembler.title(date))).find();
+	}
+
+	/**
 	 * 서버가 실제로 새로 담았으면 {@code true}, 이미 있어 건너뛰었으면 {@code false} — 선조회로
 	 * 걸러진 날도, 조회와 업로드 사이에 끼어든 기록을 서버가 건너뛴 날도 같은 {@code false} 다.
 	 * 업로드가 실패로 끝나면 예외를 던져 워크플로를 실패로 세운다 — 설계 4절 그대로다.
 	 */
 	public boolean publish(TilNote note) {
-		String listing = studyLog.search(note.date(), note.date(), note.title());
-		if (SESSION.matcher(listing).find()) {
+		if (alreadyPublished(note.date())) {
 			return false;
 		}
 
