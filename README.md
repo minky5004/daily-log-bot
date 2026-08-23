@@ -37,13 +37,14 @@ GitHub 호출만 태우고 끝나는 것.
 
 ```bash
 gh workflow run daily-log.yml --ref dev -R minky5004/daily-log-bot
+gh workflow run daily-log.yml --ref dev -f dry_run=true -R minky5004/daily-log-bot   # 올리지 않고 마크다운만
 ```
 
 ## 구조
 
 ```
 daily-log-bot/
-├── .github/workflows/daily-log.yml   KST 자정 cron · 90분 뒤 백업 발화 · 되돌리기용 수동 실행
+├── .github/workflows/daily-log.yml   KST 자정 cron · 90분 뒤 백업 발화 · 수동 실행(되돌리기 · dry-run)
 └── src/main/java/com/minky/dailylogbot/
     ├── DailyLogBot.java              진입점 — 수집 → 요약 → 조립 → 업로드
     ├── collect/                      GitHub 조회 · KST 하루를 UTC 구간으로(DayWindow)
