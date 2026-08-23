@@ -15,7 +15,7 @@
 | HTTP · JSON | JDK `HttpClient` · Jackson (프레임워크 없음 · 직접 의존 1개) |
 | 외부 | GitHub REST · Gemini `gemini-3.6-flash` 무료 티어 · study-log 폼 로그인과 `/import` |
 | 실행 주체 | GitHub Actions `schedule` cron |
-| Test | JUnit 5 · 64개 |
+| Test | JUnit 5 · 66개 |
 
 ## 실행
 
@@ -43,7 +43,7 @@ gh workflow run daily-log.yml --ref dev -R minky5004/daily-log-bot
 
 ```
 daily-log-bot/
-├── .github/workflows/daily-log.yml   KST 자정 cron · 되돌리기용 수동 실행
+├── .github/workflows/daily-log.yml   KST 자정 cron · 90분 뒤 백업 발화 · 되돌리기용 수동 실행
 └── src/main/java/com/minky/dailylogbot/
     ├── DailyLogBot.java              진입점 — 수집 → 요약 → 조립 → 업로드
     ├── collect/                      GitHub 조회 · KST 하루를 UTC 구간으로(DayWindow)
