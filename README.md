@@ -15,7 +15,7 @@
 | HTTP · JSON | JDK `HttpClient` · Jackson (프레임워크 없음 · 직접 의존 1개) |
 | 외부 | GitHub REST · Gemini `gemini-3.6-flash` 무료 티어 · study-log 폼 로그인과 `/import` |
 | 실행 주체 | GitHub Actions `schedule` cron |
-| Test | JUnit 5 · 56개 |
+| Test | JUnit 5 · 64개 |
 
 ## 실행
 
