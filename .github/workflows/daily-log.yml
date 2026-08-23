@@ -1,5 +1,9 @@
 name: daily-log
 
+# dry-run 은 아무것도 올리지 않고 초록으로 끝난다 — 목록에서 발행과 같은 줄로 보이면
+# 「어제치는 올라갔나」를 실행 목록으로 답할 수 없다
+run-name: daily-log${{ inputs.dry_run == true && ' (dry-run)' || '' }}
+
 on:
   # KST 자정 무렵(15:07 UTC). 정각을 피하는 것은 매시 정각이 액션 예약의 가장 혼잡한 슬롯이라
   # 지연·드롭이 잦기 때문 — 대상이 "어제" 라 몇 분 밀려도 수집 창이 같아, 오프셋은 발화 신뢰도만
@@ -29,9 +33,12 @@ permissions:
 
 # 발화가 둘이 된 뒤로 크게 밀린 1차와 백업이 나란히 뜰 수 있다. study-log 의 중복 판정은
 # 읽고 나서 넣는 두 걸음이라(NoteWriter 의 existsBy... 뒤 저장) 둘이 같이 통과하면 같은 하루가
-# 기록 둘이 된다 — 앞선 실행을 죽이지 않고 줄을 세운다
+# 기록 둘이 된다 — 앞선 실행을 죽이지 않고 줄을 세운다.
+# dry-run 만 제 실행 번호로 빠지는 것은 대기 중인 발행을 밀어내지 않기 위해서다: 한 그룹에서
+# 대기할 수 있는 것은 하나뿐이라, 형식을 고치며 연달아 띄우는 dry-run 이 그 자리의 예약 발행을
+# 취소한다. 아무것도 쓰지 않는 실행이라 발행과 나란히 돌아도 무해하다
 concurrency:
-  group: daily-log
+  group: daily-log-${{ inputs.dry_run == true && github.run_id || 'publish' }}
   cancel-in-progress: false
 
 jobs:
