@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.minky.dailylogbot.assemble.NoteAssembler;
 import com.minky.dailylogbot.assemble.TilNote;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -27,6 +28,28 @@ class UploaderTest {
 		assertFalse(uploaded);
 		assertFalse(fake.loggedIn);
 		assertFalse(fake.imported);
+	}
+
+	/** 조립 이전에 묻는 판정 — 세션이 보이면 참이고, 어느 쪽이든 문은 두드리지 않는다. */
+	@Test
+	void 올라간_날은_조립_전에_가려진다() {
+		Fake seen = new Fake(SESSION_LISTING, ADDED_REPORT);
+
+		assertTrue(new Uploader(seen).alreadyPublished(DATE));
+		assertFalse(seen.loggedIn);
+		assertFalse(seen.imported);
+		assertFalse(new Uploader(new Fake(EMPTY_LISTING, ADDED_REPORT)).alreadyPublished(DATE));
+	}
+
+	/** 판정의 키는 조립이 붙일 제목과 한자리에서 나온다 — 갈리는 순간 같은 하루가 기록 둘이 된다. */
+	@Test
+	void 판정은_조립과_같은_제목으로_조회한다() {
+		Fake fake = new Fake(EMPTY_LISTING, ADDED_REPORT);
+
+		new Uploader(fake).alreadyPublished(DATE);
+
+		assertEquals(List.of(DATE + "|" + DATE + "|" + NoteAssembler.title(DATE)), fake.searches);
+		assertEquals(NOTE.title(), NoteAssembler.title(DATE));
 	}
 
 	/** 조회는 하루 폭(from=to=그날)에 제목을 키워드로 싣는다. */

@@ -54,12 +54,20 @@ public class DailyLogBot {
 			return;
 		}
 
+		// 이미 있는 날은 건너뛴다 — 사용자가 아침에 end 를 고쳐 study-log 의 시각 키가 어긋나도
+		// 공개 목록으로 보는 판정이라 재실행이 기록을 둘로 만들지 않는다.
+		// 요약보다 앞인 것은 백업 발화가 매일 밤 이미 올라간 날을 다시 요약하기 때문이다 —
+		// 그 호출은 무엇도 올리지 못하면서 503 확률만 두 배로 만든다
+		Uploader uploader = new Uploader(studyLog);
+		if (uploader.alreadyPublished(day.date())) {
+			System.out.println("이미 있어 건너뜀");
+			return;
+		}
+
 		TilNote note = NoteAssembler.assemble(day, summarizer.summarize(day));
 		print(note);
 
-		// 이미 있는 날은 건너뛴다 — 사용자가 아침에 end 를 고쳐 study-log 의 시각 키가 어긋나도
-		// 공개 목록으로 보는 판정이라 재실행이 기록을 둘로 만들지 않는다
-		boolean uploaded = new Uploader(studyLog).publish(note);
+		boolean uploaded = uploader.publish(note);
 		System.out.println(uploaded ? "study-log 에 올림" : "이미 있어 건너뜀");
 	}
 
