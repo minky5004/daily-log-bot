@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * 익명화를 통과한 하루를 TIL 초안 한 편으로 옮긴다.
@@ -22,9 +21,6 @@ public final class Summarizer {
 
 	private static final DateTimeFormatter KST_TIME =
 			DateTimeFormatter.ofPattern("HH:mm").withZone(DayWindow.SEOUL);
-
-	/** 백틱 한 쌍 안에 숫자가 든 조각. 줄을 넘지 않게 막아 짝을 잃은 백틱이 본문을 삼키지 않는다. */
-	private static final Pattern QUOTED_NUMBER = Pattern.compile("`[^`\n]*\\d[^`\n]*`");
 
 	/** 설계 6절의 요약 길이 상한. 넘기면 study-log 가 그 파일을 거부한다. */
 	private static final int MAX_SUMMARY = 500;
@@ -141,7 +137,7 @@ public final class Summarizer {
 						pull.repo(), pull.number(), KST_TIME.format(pull.createdAt()), pull.title(),
 						"https://github.com/%s/pull/%d".formatted(pull.repo(), pull.number())));
 				if (pull.body() != null && !pull.body().isBlank()) {
-					sb.append("  %s\n".formatted(indent(clip(dropQuotedNumbers(pull.body()), MAX_TEXT))));
+					sb.append("  %s\n".formatted(indent(clip(pull.body(), MAX_TEXT))));
 				}
 			}
 		}
@@ -154,26 +150,6 @@ public final class Summarizer {
 			sb.append(PUBLIC_NONE);
 		}
 		return sb.toString();
-	}
-
-	/**
-	 * PR 본문에서 수치가 든 인라인 코드 조각을 걷어 낸다.
-	 *
-	 * <p>이 리포의 PR 은 봇이 만든 노트를 검증 근거로 인용한다 — 그 인용 안의 수치는 다른
-	 * 저장소의 것인데 본문 어디에도 그렇게 적힌 표시가 없어, 모델에게는 이 PR 이 낸 실측값과
-	 * 구별할 근거가 없다. 8/23 노트에서 study-log 의 테스트 수 {@code 276개 통과} 가
-	 * daily-log-bot 절에 앉은 자리다.
-	 *
-	 * <p>프롬프트 규칙으로 세 번 막아 보았으나 매번 밀렸다. 바로 앞의 「실측값을 빠뜨리지
-	 * 말라」와 정면으로 부딪히는데, 그쪽은 10번 사이클이 본문 밀도를 위해 세운 규칙이라 힘이
-	 * 세다 — 걷어 내는 일은 재료를 만드는 쪽이 진다.
-	 *
-	 * <p>식별자는 그대로 남는다. 숫자가 없어 걸리지 않기 때문이고, 걸리는 것은 인용된 실측값 ·
-	 * cron 표현식 · 실행 번호뿐이라 셋 다 불릿에 실릴 값이 아니다. 조각을 지우지 않고 {@code …}
-	 * 를 남기는 것은 인용이 있던 자리까지 지우면 앞뒤 문장이 붙어 다른 뜻이 되기 때문이다.
-	 */
-	static String dropQuotedNumbers(String body) {
-		return QUOTED_NUMBER.matcher(body).replaceAll("…");
 	}
 
 	/** 여러 줄짜리 값이 항목 사이로 흘러나오지 않게 이어지는 줄을 들여쓴다. */
