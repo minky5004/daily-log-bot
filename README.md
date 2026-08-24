@@ -1,8 +1,8 @@
 # daily-log-bot
 
-> 매일 자정 · 계정 전체의 그날 커밋과 PR 을 TIL 한 장으로 접어 [study-log](https://study-log-n6ez.onrender.com) 에 올리는 봇
+> 매일 자정 · 계정 전체의 그날 커밋과 PR 로 접은 TIL 한 장을 [study-log](https://study-log-n6ez.onrender.com) 에 올리는 봇
 
-**산출물 — [2026-08-19 개발 기록](https://study-log-n6ez.onrender.com/logs/133)** · 배포된 화면이 아니라 매일 쌓이는 기록이 이 도구의 결과물 · 무료 티어 · 첫 접속은 기동 대기 30초 안팎
+**산출물 — [봇이 올린 기록](https://study-log-n6ez.onrender.com/logs?keyword=%EA%B0%9C%EB%B0%9C%20%EA%B8%B0%EB%A1%9D)** · 이 도구의 결과물은 배포된 화면 아닌 매일 쌓이는 기록 · 무료 티어 · 첫 접속은 기동 대기 30초 안팎
 
 ![study-log 에 올라간 노트](docs/screenshots/note.png)
 
