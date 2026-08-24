@@ -38,10 +38,13 @@ public final class StudyLogClient implements StudyLog {
 	private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(120);
 
 	/**
-	 * GET 재시도 횟수. 콜드 스타트는 상한이 얼마든 가끔 넘기므로 상한을 키우는 대신 되친다 —
-	 * 되치는 사이 앱이 깨어나 다음 시도는 곧 응답한다. GET 만 되친다: 임포트 POST 가 서버에 닿은
-	 * 뒤 응답만 늦으면 되쳤을 때 기록이 둘이 된다 — 이 사이클이 막으려는 바로 그 중복이다.
-	 * 상한 120초 × 3 = 최악 6분으로 잡 상한 15분 안이다.
+	 * 첫 접촉 GET 의 재시도 횟수. 콜드 스타트는 상한이 얼마든 가끔 넘기므로 상한을 키우는 대신
+	 * 되친다 — 되치는 사이 앱이 깨어나 다음 시도는 곧 응답한다. GET 만 되친다: 임포트 POST 가
+	 * 서버에 닿은 뒤 응답만 늦으면 되쳤을 때 기록이 둘이 된다 — 6번 사이클이 막으려던 바로 그
+	 * 중복이다.
+	 *
+	 * <p>3회는 실측에서 온 값이다 — 8/21 러너가 {@code GET /logs — 3회 모두 응답 없음} 으로
+	 * 끝났으므로 줄일 자리가 아니다.
 	 */
 	private static final int GET_ATTEMPTS = 3;
 
@@ -55,6 +58,16 @@ public final class StudyLogClient implements StudyLog {
 	private final String baseUrl;
 	private final String username;
 	private final String password;
+
+	/**
+	 * 이 인스턴스가 응답을 한 번이라도 받았는가. 되치는 이유가 콜드 스타트 하나이고 그것은 실행당
+	 * 한 번뿐이라, 깨어난 뒤의 GET 은 되치지 않는다.
+	 *
+	 * <p>이것이 없으면 예산이 요청 수를 따라 늘어난다 — 되치는 GET 이 넷(`/logs` 둘 · `/login` ·
+	 * `/import`)이라 상한 120초에 최악 28분이고, 잡 상한 20분 밖이다. 깨어난 뒤 응답이 없는 것은
+	 * 콜드 스타트가 아니라 다른 고장이라, 되쳐서 나아지는 것도 없다.
+	 */
+	private boolean awake;
 
 	public StudyLogClient(String baseUrl, String username, String password) {
 		if (baseUrl == null || baseUrl.isBlank()) {
@@ -157,9 +170,12 @@ public final class StudyLogClient implements StudyLog {
 
 	private HttpResponse<String> sendOnce(HttpRequest.Builder request, String label) {
 		try {
-			return http.send(
+			HttpResponse<String> response = http.send(
 					request.timeout(REQUEST_TIMEOUT).header("User-Agent", "daily-log-bot").build(),
 					HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+			// 상태 코드가 무엇이든 응답이 왔으면 앱은 깨어 있다 — 뒤따르는 GET 의 예산이 여기서 접힌다
+			awake = true;
+			return response;
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		} catch (InterruptedException e) {
@@ -168,21 +184,31 @@ public final class StudyLogClient implements StudyLog {
 		}
 	}
 
+	/** 이 GET 에 허용된 시도 횟수. 콜드 스타트를 아직 넘지 못한 첫 접촉만 되친다. */
+	static int attemptsFor(boolean awake) {
+		return awake ? 1 : GET_ATTEMPTS;
+	}
+
 	/**
-	 * 콜드 스타트를 넘기려 GET 을 되친다. 타임아웃·연결 실패({@link UncheckedIOException})는 앱이
-	 * 아직 깨는 중이라는 신호라 다시 치고, 그 밖의 실패(잘못된 상태 코드 등)는 그대로 올린다.
+	 * 콜드 스타트를 넘기려 첫 GET 을 되친다. 타임아웃·연결 실패({@link UncheckedIOException})는
+	 * 앱이 아직 깨는 중이라는 신호라 다시 치고, 그 밖의 실패(잘못된 상태 코드 등)는 그대로 올린다.
 	 */
 	private HttpResponse<String> getRetrying(HttpRequest.Builder request, String label) {
+		int attempts = attemptsFor(awake);
 		UncheckedIOException last = null;
-		for (int attempt = 1; attempt <= GET_ATTEMPTS; attempt++) {
+		for (int attempt = 1; attempt <= attempts; attempt++) {
 			try {
 				return sendOnce(request, label);
 			} catch (UncheckedIOException e) {
 				last = e;
 			}
 		}
+		// 깨어 있던 앱의 무응답은 콜드 스타트가 아니라 다른 고장이라 사유를 갈라 적는다
 		throw new IllegalStateException(
-				"%s — %d회 모두 응답 없음 (Render 콜드 스타트)".formatted(label, GET_ATTEMPTS), last);
+				attempts == 1
+						? "%s — 응답 없음 (기동한 앱)".formatted(label)
+						: "%s — %d회 모두 응답 없음 (Render 콜드 스타트)".formatted(label, attempts),
+				last);
 	}
 
 	/** 응답 본문은 붙이지 않는다 — 실패 화면이 커 로그를 덮고, 비밀번호를 실은 요청의 되울림이 섞일 수 있다. */
