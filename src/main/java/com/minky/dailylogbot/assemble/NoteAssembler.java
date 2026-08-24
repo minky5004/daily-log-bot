@@ -42,6 +42,10 @@ public final class NoteAssembler {
 	 * 조회하는 쪽이 제 손으로 같은 문자열을 만들면 둘이 갈리는 날 같은 하루가 기록 둘이 된다.
 	 *
 	 * <p>요약을 부르기 전에 「이미 올라간 날인가」를 물으려면 초안 없이 제목이 필요해서 갈랐다.
+	 *
+	 * <p>README 머리의 산출물 링크가 이 문자열을 제목 검색어로 박아 두었다 — 문구를 바꾸면 그
+	 * 링크는 404 가 아니라 빈 목록을 200 으로 돌려주고, 읽는 사람에게는 봇이 아무것도 만들지
+	 * 못한 화면으로 보인다. 바꿀 일이 생기면 README 를 같은 커밋에서 고친다.
 	 */
 	public static String title(LocalDate date) {
 		return "%s 개발 기록".formatted(date);
