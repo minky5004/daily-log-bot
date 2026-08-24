@@ -66,6 +66,11 @@ public final class StudyLogClient implements StudyLog {
 	 * <p>이것이 없으면 예산이 요청 수를 따라 늘어난다 — 되치는 GET 이 넷(`/logs` 둘 · `/login` ·
 	 * `/import`)이라 상한 120초에 최악 28분이고, 잡 상한 20분 밖이다. 깨어난 뒤 응답이 없는 것은
 	 * 콜드 스타트가 아니라 다른 고장이라, 되쳐서 나아지는 것도 없다.
+	 *
+	 * <p>실행이 끝날 때까지 한 번 접힌 예산이 다시 열리지 않는 것이 대가다. 요약 앞 판정이 앱을
+	 * 깨운 뒤 Gemini 왕복(실측 3~4분)이 끼므로, 그 사이 Render 무료 티어의 15분 유휴를 넘겨 다시
+	 * 잠들면 뒤따르는 GET 은 되치지 못한다. 그만큼 걸리는 요약은 잡 상한에도 걸리는 날이라
+	 * 시각으로 만료를 재는 대신 그날을 백업 발화에 넘긴다.
 	 */
 	private boolean awake;
 
@@ -206,7 +211,7 @@ public final class StudyLogClient implements StudyLog {
 		// 깨어 있던 앱의 무응답은 콜드 스타트가 아니라 다른 고장이라 사유를 갈라 적는다
 		throw new IllegalStateException(
 				attempts == 1
-						? "%s — 응답 없음 (기동한 앱)".formatted(label)
+						? "%s — 응답 없음 (깨어 있던 앱)".formatted(label)
 						: "%s — %d회 모두 응답 없음 (Render 콜드 스타트)".formatted(label, attempts),
 				last);
 	}
