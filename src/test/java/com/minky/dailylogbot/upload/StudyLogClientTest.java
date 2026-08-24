@@ -9,6 +9,14 @@ import org.junit.jupiter.api.Test;
 
 class StudyLogClientTest {
 
+	/** 되치는 이유가 콜드 스타트 하나라, 응답을 한 번 받은 뒤의 무응답은 되쳐도 나아지지 않는다. */
+	@Test
+	void 되치는_것은_아직_깨우지_못한_첫_GET_뿐이다() {
+		// 예산이 요청 수만큼 늘던 자리 — 되치는 GET 이 넷이라 최악 28분이 잡 상한 밖이었다
+		assertEquals(3, StudyLogClient.attemptsFor(false));
+		assertEquals(1, StudyLogClient.attemptsFor(true));
+	}
+
 	/** 스프링이 렌더하는 hidden 필드에서 토큰을 뽑는다 — name 다음 value 순서다. */
 	@Test
 	void csrf_토큰을_렌더된_폼에서_뽑는다() {

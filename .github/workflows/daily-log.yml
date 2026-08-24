@@ -44,8 +44,11 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    # 외부 API 응답을 기다리다 멈추면 기본 상한 6시간까지 러너를 붙잡는다
-    timeout-minutes: 15
+    # 외부 API 응답을 기다리다 멈추면 기본 상한 6시간까지 러너를 붙잡는다.
+    # 20분은 study-log 왕복의 이론 최악(첫 GET 3회 · 나머지 다섯 요청 각 1회 · 요청 상한 120초 =
+    # 16분)에 빌드와 셋업을 더한 값이다 — 이 상한이 최악보다 낮으면 러너가 POST /import 직전에
+    # 잡을 죽여 그날이 빈다
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
