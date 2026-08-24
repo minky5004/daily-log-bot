@@ -66,6 +66,40 @@ class SummarizerTest {
 	}
 
 	@Test
+	@DisplayName("PR 본문이 인용한 수치는 프롬프트에 실리지 않는다")
+	void quotedNumbersLeaveThePrompt() {
+		AnonymousDay day = day(
+				List.of(),
+				List.of(pull("## 검증\n\n- 실측값 `3회 49·39·35초 · 276개 통과` 는 그대로 · 테스트 64→66건")),
+				new AnonymousDay.Hidden(0, 0, 0));
+
+		String prompt = Summarizer.prompt(day);
+
+		assertFalse(prompt.contains("276개 통과"), prompt);
+		// 인용 밖 실측값은 이 PR 이 낸 값이라 남는다 — 걷어 내는 것은 인용된 조각뿐이다
+		assertTrue(prompt.contains("테스트 64→66건"), prompt);
+	}
+
+	@Test
+	@DisplayName("숫자 없는 인라인 코드는 식별자라 그대로 남는다")
+	void identifiersSurvive() {
+		AnonymousDay day = day(
+				List.of(),
+				List.of(pull("재시도 예산은 `StudyLogClient` 가 진다")),
+				new AnonymousDay.Hidden(0, 0, 0));
+
+		assertTrue(Summarizer.prompt(day).contains("`StudyLogClient`"), Summarizer.prompt(day));
+	}
+
+	@Test
+	@DisplayName("짝을 잃은 백틱은 뒤따르는 본문을 삼키지 않는다")
+	void unpairedBacktickKeepsTheRest() {
+		String kept = Summarizer.dropQuotedNumbers("열린 `조각 3개\n다음 줄은 남는다");
+
+		assertTrue(kept.contains("다음 줄은 남는다"), kept);
+	}
+
+	@Test
 	@DisplayName("숨긴 활동은 집계 문장 한 줄로만 들어간다")
 	void hiddenGoesInAsCountsOnly() {
 		AnonymousDay day = day(List.of(), List.of(), new AnonymousDay.Hidden(1, 2, 0));

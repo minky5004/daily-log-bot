@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * 익명화를 통과한 하루를 TIL 초안 한 편으로 옮긴다.
@@ -21,6 +22,9 @@ public final class Summarizer {
 
 	private static final DateTimeFormatter KST_TIME =
 			DateTimeFormatter.ofPattern("HH:mm").withZone(DayWindow.SEOUL);
+
+	/** 백틱 한 쌍 안에 숫자가 든 조각. 줄을 넘지 않게 막아 짝을 잃은 백틱이 본문을 삼키지 않는다. */
+	private static final Pattern QUOTED_NUMBER = Pattern.compile("`[^`\n]*\\d[^`\n]*`");
 
 	/** 설계 6절의 요약 길이 상한. 넘기면 study-log 가 그 파일을 거부한다. */
 	private static final int MAX_SUMMARY = 500;
@@ -65,13 +69,13 @@ public final class Summarizer {
 			- summary 는 한 줄 · 100자 이내 · 그날을 통째로 가리키는 명사구 — 위 문체 규칙은 body 만이 아니라 summary 에도 그대로 걸린다
 			- body 는 마크다운 · 저장소마다 `## 저장소명` · 그 아래 `-` 불릿 · 전체 2000자 이내
 			- 불릿 하나는 한 덩어리다 — 무엇을 했는지 · `—` 뒤에 왜 그렇게 했는지
-			- 커밋 메시지 · PR 본문의 평문에 적힌 실측값이나 검증 결과는 그 수치를 그대로 싣는다 — `응답 120ms` `기동 3.4초` 처럼 · 활동 목록 머리의 `+n -n` 과 건수 · 백틱이나 따옴표에 감싸여 인용된 조각 안의 수치는 여기 해당하지 않는다
+			- 커밋 메시지 · PR 본문의 글에 적힌 실측값이나 검증 결과는 그 수치를 그대로 싣는다 — `응답 120ms` `기동 3.4초` 처럼 · 활동 목록 머리의 `+n -n` 과 건수는 여기 해당하지 않는다
 			- 같은 PR 을 여러 불릿으로 나누지 않는다. PR 하나가 불릿 하나다
 			- 한 불릿에서 `—` 는 한 번 · `·` 는 세 번까지다. 더 이어 붙이면 불릿이 아니라 문단이다
 			- 불릿 끝에 괄호로 PR 링크만 단다 — 형태는 `([PR #번호](링크))` · 링크는 활동 목록 PR 절의 `링크:` 값을 그대로 옮긴다 · PR 이 없는 불릿은 괄호도 없다
 			- 증감 줄 수와 커밋 건수를 본문에 옮기지 않는다 — 여러 커밋을 한 불릿에 묶으며 더한 수는 틀린다 · 비공개 집계 문장은 예외로 그대로 쓴다
 			- 저장소 이름 · PR 번호 · 링크는 주어진 그대로 쓴다
-			- 다 쓴 뒤 불릿마다 되짚는다 — `및` 이 남았는가 · `~해` `~어` `~고` 로 이어 붙였는가 · 서술명사로 끝났는가 · 활동 본문의 실측값을 빠뜨렸는가 · 인용된 조각 안의 수치를 옮겨 왔는가
+			- 다 쓴 뒤 불릿마다 되짚는다 — `및` 이 남았는가 · `~해` `~어` `~고` 로 이어 붙였는가 · 서술명사로 끝났는가 · 활동 본문의 실측값을 빠뜨렸는가
 
 			활동
 			""";
@@ -137,7 +141,7 @@ public final class Summarizer {
 						pull.repo(), pull.number(), KST_TIME.format(pull.createdAt()), pull.title(),
 						"https://github.com/%s/pull/%d".formatted(pull.repo(), pull.number())));
 				if (pull.body() != null && !pull.body().isBlank()) {
-					sb.append("  %s\n".formatted(indent(clip(pull.body(), MAX_TEXT))));
+					sb.append("  %s\n".formatted(indent(clip(dropQuotedNumbers(pull.body()), MAX_TEXT))));
 				}
 			}
 		}
@@ -150,6 +154,26 @@ public final class Summarizer {
 			sb.append(PUBLIC_NONE);
 		}
 		return sb.toString();
+	}
+
+	/**
+	 * PR 본문에서 수치가 든 인라인 코드 조각을 걷어 낸다.
+	 *
+	 * <p>이 리포의 PR 은 봇이 만든 노트를 검증 근거로 인용한다 — 그 인용 안의 수치는 다른
+	 * 저장소의 것인데 본문 어디에도 그렇게 적힌 표시가 없어, 모델에게는 이 PR 이 낸 실측값과
+	 * 구별할 근거가 없다. 8/23 노트에서 study-log 의 테스트 수 {@code 276개 통과} 가
+	 * daily-log-bot 절에 앉은 자리다.
+	 *
+	 * <p>프롬프트 규칙으로 세 번 막아 보았으나 매번 밀렸다. 바로 앞의 「실측값을 빠뜨리지
+	 * 말라」와 정면으로 부딪히는데, 그쪽은 10번 사이클이 본문 밀도를 위해 세운 규칙이라 힘이
+	 * 세다 — 걷어 내는 일은 재료를 만드는 쪽이 진다.
+	 *
+	 * <p>식별자는 그대로 남는다. 숫자가 없어 걸리지 않기 때문이고, 걸리는 것은 인용된 실측값 ·
+	 * cron 표현식 · 실행 번호뿐이라 셋 다 불릿에 실릴 값이 아니다. 조각을 지우지 않고 {@code …}
+	 * 를 남기는 것은 인용이 있던 자리까지 지우면 앞뒤 문장이 붙어 다른 뜻이 되기 때문이다.
+	 */
+	static String dropQuotedNumbers(String body) {
+		return QUOTED_NUMBER.matcher(body).replaceAll("…");
 	}
 
 	/** 여러 줄짜리 값이 항목 사이로 흘러나오지 않게 이어지는 줄을 들여쓴다. */
