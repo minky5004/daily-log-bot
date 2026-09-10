@@ -70,6 +70,7 @@ public final class StudyLogClient implements StudyLog {
 	 * <p>시각으로 만료를 재지 않는 것은 다시 잠들 틈이 없기 때문이다. 첫 GET 과 뒤따르는 GET
 	 * 사이에 끼는 것은 요약과 조립뿐이고 그 왕복이 실측 19초라(run 32692648515 — 수집 종료
 	 * {@code 05:12:28} · 노트 출력 {@code 05:12:47}), Render 무료 티어의 15분 유휴에 닿지 않는다.
+	 * {@code GeminiClient} 가 5xx 를 되치는 날에도 최악 7분 30초라 그 안이다.
 	 */
 	private boolean awake;
 
