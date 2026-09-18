@@ -29,6 +29,23 @@ public final class GeminiClient implements SummaryModel {
 	/** 무료 티어. 하루 한 번 호출이라 한도가 판단 근거가 되지 못한다. */
 	private static final String MODEL = "gemini-3.6-flash";
 
+	/**
+	 * {@link #MODEL} 이 재시도 끝까지 막혔을 때 한 번 더 던질 모델.
+	 *
+	 * <p>재시도도 백업 발화도 같은 모델을 두드린다. 9/17 은 30초 · 60초 재시도 셋이 다 503 이었다 —
+	 * 과부하가 분 단위를 넘기면 바꿀 수 있는 것은 모델뿐이다.
+	 *
+	 * <p>위가 아니라 아래 세대로 넘어간다. 과부하는 새 세대에 몰린다 — 9/18 11:38~11:45 UTC 1분
+	 * 간격 세 번에서 3.7 · 3.8 은 전부 503 · 3.5 는 셋 중 둘 · 2.5 는 셋 다 200 이었고, ai-cards-news
+	 * 의 3.7 은 9/14~9/17 여덟 실행 중 여섯이 503 이었다. lite 도 셋 다 열려 있었지만 문체 규칙을
+	 * 지켜 쓸 글이라 full flash 에서 고른다. 한도는 모델마다 따로 서서 1차 · 백업이 한 번씩
+	 * 넘어와도 2/20 이다.
+	 *
+	 * <p>폴백은 한 번만 친다. 1차가 그 한 번까지 잃으면 한 시간 뒤 백업이 두 모델을 처음부터 다시
+	 * 두드린다.
+	 */
+	private static final String FALLBACK_MODEL = "gemini-2.5-flash";
+
 	private static final String BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
 
 	/*
@@ -57,20 +74,20 @@ public final class GeminiClient implements SummaryModel {
 			.build();
 	private final ObjectMapper mapper = new ObjectMapper();
 	private final String apiKey;
-	private final String endpoint;
+	private final String base;
 	private final Consumer<Duration> pause;
 
 	public GeminiClient(String apiKey) {
-		this(apiKey, BASE + MODEL + ":generateContent", GeminiClient::sleep);
+		this(apiKey, BASE, GeminiClient::sleep);
 	}
 
 	/** 주소와 대기를 바꿔 끼우는 자리. 테스트가 가짜 서버를 두고 대기는 기록만 한다. */
-	GeminiClient(String apiKey, String endpoint, Consumer<Duration> pause) {
+	GeminiClient(String apiKey, String base, Consumer<Duration> pause) {
 		if (apiKey == null || apiKey.isBlank()) {
 			throw new IllegalArgumentException("GEMINI_API_KEY 없음 — 요약에 필요하다");
 		}
 		this.apiKey = apiKey;
-		this.endpoint = endpoint;
+		this.base = base;
 		this.pause = pause;
 	}
 
@@ -82,30 +99,46 @@ public final class GeminiClient implements SummaryModel {
 	 */
 	@Override
 	public String generate(String prompt, JsonNode responseSchema) {
-		HttpRequest request = HttpRequest.newBuilder(URI.create(endpoint))
-				// 키를 질의 문자열이 아니라 헤더로 보낸다. URL 은 실패 메시지와 함께 그대로
-				// 공개 실행 로그에 남는 자리다
-				.header("x-goog-api-key", apiKey)
-				.header("Content-Type", "application/json")
-				.timeout(Duration.ofSeconds(120))
-				.POST(HttpRequest.BodyPublishers.ofString(
-						body(prompt, responseSchema), StandardCharsets.UTF_8))
-				.build();
-
-		HttpResponse<String> response = send(request);
+		String body = body(prompt, responseSchema);
+		HttpResponse<String> response = send(request(MODEL, body));
 		for (Duration wait : RETRY_WAITS) {
 			if (!retryable(response.statusCode())) {
 				break;
 			}
 			pause.accept(wait);
-			response = send(request);
+			response = send(request(MODEL, body));
+		}
+		if (response.statusCode() == 200) {
+			return text(read(response.body()));
 		}
 
-		if (response.statusCode() != 200) {
-			throw new IllegalStateException(
-					"Gemini %s → %d %s".formatted(MODEL, response.statusCode(), response.body()));
+		String failure = failure(MODEL, response);
+		if (!fallsBack(response.statusCode())) {
+			throw new IllegalStateException(failure);
 		}
-		return text(read(response.body()));
+		// 성공한 날에도 남긴다 — 이 줄이 없으면 그날 노트를 어느 모델이 썼는지 로그로 갈리지 않는다
+		System.out.printf("%s → %d · %s 로 넘어감%n", MODEL, response.statusCode(), FALLBACK_MODEL);
+		HttpResponse<String> fallback = send(request(FALLBACK_MODEL, body));
+		if (fallback.statusCode() != 200) {
+			// 첫 모델의 사유도 싣는다 — 폴백 쪽 오류만 남으면 왜 넘어갔는지가 로그에서 사라진다
+			throw new IllegalStateException(failure + "\n" + failure(FALLBACK_MODEL, fallback));
+		}
+		return text(read(fallback.body()));
+	}
+
+	private HttpRequest request(String model, String body) {
+		return HttpRequest.newBuilder(URI.create(base + model + ":generateContent"))
+				// 키를 질의 문자열이 아니라 헤더로 보낸다. URL 은 실패 메시지와 함께 그대로
+				// 공개 실행 로그에 남는 자리다
+				.header("x-goog-api-key", apiKey)
+				.header("Content-Type", "application/json")
+				.timeout(Duration.ofSeconds(120))
+				.POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+				.build();
+	}
+
+	private static String failure(String model, HttpResponse<String> response) {
+		return "Gemini %s → %d %s".formatted(model, response.statusCode(), response.body());
 	}
 
 	/**
@@ -115,6 +148,14 @@ public final class GeminiClient implements SummaryModel {
 	 */
 	static boolean retryable(int status) {
 		return status >= 500;
+	}
+
+	/**
+	 * 다른 모델로 넘어갈 실패. 되친 끝의 5xx 에 429 가 더해진다 — 같은 모델로는 되치지 않는 429 도
+	 * 한도가 모델마다 따로 서서 다른 모델에는 남아 있다. 400 같은 요청 쪽 실패는 모델을 바꿔도 같다.
+	 */
+	static boolean fallsBack(int status) {
+		return retryable(status) || status == 429;
 	}
 
 	private HttpResponse<String> send(HttpRequest request) {

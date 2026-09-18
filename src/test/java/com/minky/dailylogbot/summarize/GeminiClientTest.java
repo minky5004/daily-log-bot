@@ -34,6 +34,8 @@ class GeminiClientTest {
 	private static final List<Duration> SPACING = List.of(Duration.ofSeconds(30), Duration.ofSeconds(60));
 
 	private final AtomicInteger requests = new AtomicInteger();
+	/** 요청마다 두드린 모델. 경로의 {@code models/} 와 {@code :} 사이다. */
+	private final List<String> models = new ArrayList<>();
 	private final List<Duration> waits = new ArrayList<>();
 	private HttpServer server;
 
@@ -54,6 +56,8 @@ class GeminiClientTest {
 		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
 		server.createContext("/", exchange -> {
 			requests.incrementAndGet();
+			String path = exchange.getRequestURI().getPath();
+			models.add(path.substring(path.lastIndexOf('/') + 1, path.indexOf(':')));
 			exchange.getRequestBody().readAllBytes();
 			// 준비한 것보다 많이 치면 요청 수 단언이 잡는다
 			int status = queue.isEmpty() ? 500 : queue.poll();
@@ -66,8 +70,8 @@ class GeminiClientTest {
 		});
 		server.start();
 
-		String endpoint = "http://127.0.0.1:%d/model:generateContent".formatted(server.getAddress().getPort());
-		return new GeminiClient("key", endpoint, waits::add);
+		String base = "http://127.0.0.1:%d/models/".formatted(server.getAddress().getPort());
+		return new GeminiClient("key", base, waits::add);
 	}
 
 	@Test
@@ -88,24 +92,45 @@ class GeminiClientTest {
 	}
 
 	@Test
-	@DisplayName("429 는 다시 치지 않는다 — 하루 한도는 리셋 전까지 풀리지 않는다")
-	void quotaIsNotRetried() throws IOException {
-		GeminiClient client = answering(429);
+	@DisplayName("429 는 같은 모델로 다시 치지 않고 다른 모델로 한 번 넘어간다")
+	void quotaFallsBackWithoutRetry() throws IOException {
+		// 하루 한도는 리셋 전까지 풀리지 않지만 모델마다 따로 선다
+		GeminiClient client = answering(429, 200);
 
-		IllegalStateException e = assertThrows(IllegalStateException.class, () -> client.generate("p", SCHEMA));
-		assertTrue(e.getMessage().contains("→ 429"), e.getMessage());
-		assertEquals(1, requests.get());
+		assertEquals("본문", client.generate("p", SCHEMA));
+		assertEquals(List.of("gemini-3.6-flash", "gemini-2.5-flash"), models);
 		assertTrue(waits.isEmpty(), waits.toString());
 	}
 
 	@Test
-	@DisplayName("세 번 다 5xx 면 마지막 응답으로 실패하고 마지막 뒤에는 기다리지 않는다")
-	void givesUpWithTheLastAnswer() throws IOException {
-		GeminiClient client = answering(500, 502, 503);
+	@DisplayName("세 번 다 5xx 면 다른 모델로 한 번 더 쳐서 받아 온다")
+	void overloadFallsBackToAnotherModel() throws IOException {
+		GeminiClient client = answering(500, 502, 503, 200);
+
+		assertEquals("본문", client.generate("p", SCHEMA));
+		assertEquals(List.of("gemini-3.6-flash", "gemini-3.6-flash", "gemini-3.6-flash", "gemini-2.5-flash"), models);
+		assertEquals(SPACING, waits);
+	}
+
+	@Test
+	@DisplayName("둘 다 막히면 두 모델의 실패를 함께 싣고 폴백은 한 번만 친다")
+	void givesUpWithBothFailures() throws IOException {
+		GeminiClient client = answering(503, 503, 503, 503);
 
 		IllegalStateException e = assertThrows(IllegalStateException.class, () -> client.generate("p", SCHEMA));
-		assertTrue(e.getMessage().contains("→ 503"), e.getMessage());
-		assertEquals(3, requests.get());
+		assertTrue(e.getMessage().contains("gemini-3.6-flash → 503"), e.getMessage());
+		assertTrue(e.getMessage().contains("gemini-2.5-flash → 503"), e.getMessage());
+		assertEquals(4, requests.get());
 		assertEquals(SPACING, waits);
+	}
+
+	@Test
+	@DisplayName("400 은 모델을 바꿔도 같아 넘어가지 않는다")
+	void badRequestDoesNotFallBack() throws IOException {
+		GeminiClient client = answering(400);
+
+		IllegalStateException e = assertThrows(IllegalStateException.class, () -> client.generate("p", SCHEMA));
+		assertTrue(e.getMessage().contains("→ 400"), e.getMessage());
+		assertEquals(1, requests.get());
 	}
 }
