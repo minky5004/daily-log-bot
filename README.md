@@ -13,9 +13,9 @@
 | Language | Java 21 |
 | Build | Gradle 9.5.1 · `application` 플러그인으로 `./gradlew run` |
 | HTTP · JSON | JDK `HttpClient` · Jackson (프레임워크 없음 · 직접 의존 1개) |
-| 외부 | GitHub REST · Gemini `gemini-3.6-flash` 무료 티어 · study-log 폼 로그인과 `/import` |
+| 외부 | GitHub REST · Gemini `gemini-3.6-flash`(막힌 날 `gemini-2.5-flash`) 무료 티어 · study-log 폼 로그인과 `/import` |
 | 실행 주체 | GitHub Actions `schedule` cron |
-| Test | JUnit 5 · 70개 |
+| Test | JUnit 5 · 72개 |
 
 ## 실행
 
