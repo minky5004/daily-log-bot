@@ -6,6 +6,19 @@
 
 ![study-log 에 올라간 노트](docs/screenshots/note.png)
 
+## 파이프라인
+
+| 단계 | 하는 일 | 산출물 |
+| --- | --- | --- |
+| `collect` | GitHub 커밋·PR 조회 · KST 하루를 UTC 구간으로 변환 | `DailyActivity` |
+| `anonymize` | private 리포 세부 제거 — 이후 단계가 보는 유일한 입력 | `AnonymousDay` |
+| `summarize` | Gemini REST 호출 · 빈 값·상한 초과 검증 | `TilDraft` |
+| `assemble` | 세션 합산 · 프론트매터 마크다운 조립 · 태그 | `TilNote` |
+| `upload` | 중복 선판정(요약 앞) · 폼 로그인 · multipart `/import`(조립 뒤) | study-log 등록 |
+
+표 순서와 달리 `upload` 의 중복 선판정은 `summarize` 보다 먼저 돈다 — 이미 게시된 날에
+Gemini 호출을 태우지 않기 위해서.
+
 ## 기술 스택
 
 | 구분 | 기술 |
