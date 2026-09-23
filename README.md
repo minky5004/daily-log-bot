@@ -14,7 +14,10 @@
 | `anonymize` | private 리포 세부 제거 — 이후 단계가 보는 유일한 입력 | `AnonymousDay` |
 | `summarize` | Gemini REST 호출 · 빈 값·상한 초과 검증 | `TilDraft` |
 | `assemble` | 세션 합산 · 프론트매터 마크다운 조립 · 태그 | `TilNote` |
-| `upload` | 중복 선판정 · 폼 로그인 · multipart `/import` | study-log 등록 |
+| `upload` | 중복 선판정(요약 앞) · 폼 로그인 · multipart `/import`(조립 뒤) | study-log 등록 |
+
+표 순서와 달리 `upload` 의 중복 선판정은 `summarize` 보다 먼저 돈다 — 이미 게시된 날에
+Gemini 호출을 태우지 않기 위해서.
 
 ## 기술 스택
 
