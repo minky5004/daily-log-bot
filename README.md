@@ -1,5 +1,7 @@
 # daily-log-bot
 
+📎 [Notion 정리](https://app.notion.com/p/3e47b7516d7c81df84d9f28c007b1ffa)
+
 > 매일 자정 · 계정 전체의 그날 커밋과 PR 로 접은 TIL 한 장을 [study-log](https://study-log-n6ez.onrender.com) 에 올리는 봇
 
 **산출물 — [봇이 올린 기록](https://study-log-n6ez.onrender.com/logs?keyword=%EA%B0%9C%EB%B0%9C%20%EA%B8%B0%EB%A1%9D)** · 이 도구의 결과물은 배포된 화면 아닌 매일 쌓이는 기록 · 무료 티어 · 첫 접속은 기동 대기 30초 안팎
