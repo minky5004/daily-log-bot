@@ -10,6 +10,7 @@ on:
   # 올리고 결과는 그대로다(DayWindow 참고).
   # schedule 은 기본 브랜치의 워크플로만 발화하므로 dev 머지 전에는 예약이 걸리지 않는다
   schedule:
+    # 이 값을 바꾸면 alert 잡의 FIRST_SCHEDULE 도 함께 — 1차 실패를 알림에서 빼는 판정이 이 문자열이다
     - cron: '7 15 * * *'
     # 90분 뒤 한 번 더. 상류 일시 장애로 1차가 죽은 날을 덮는다 — Gemini 503 이 8/19 · 8/22
     # 이틀을 날렸고, 되살린 것은 둘 다 수동 실행이라 사람이 알아챌 때까지 그날이 비어 있었다.
@@ -50,6 +51,8 @@ jobs:
     # 16분)에 Gemini 최악(5xx 3회 · 폴백 모델 1회 · 요청 상한 120초 · 사이 대기 30초·60초 = 9분 30초)과
     # 빌드·셋업을 더한 값이다 — 이 상한이 최악보다 낮으면 러너가 POST /import 직전에 잡을 죽여 그날이 빈다
     timeout-minutes: 28
+    outputs:
+      date: ${{ steps.day.outputs.date }}
     steps:
       - uses: actions/checkout@v7
 
@@ -67,6 +70,12 @@ jobs:
       - name: Build
         run: ./gradlew build
 
+      # 봇이 처리할 날짜를 봇이 뜨기 직전에 적어 둔다(DayWindow.yesterday 와 같은 규칙) — 알림이
+      # 실패 시각으로 다시 지으면, 자정 전에 시작해 자정 뒤에 죽은 복구 실행의 이슈가 하루 어긋난다
+      - name: Target date
+        id: day
+        run: echo "date=$(TZ=Asia/Seoul date -d yesterday +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
       # 빌드와 나누는 것은 컴파일 실패와 실행 실패를 로그의 같은 자리에서 보지 않기 위해서
       # 자동 발급되는 GITHUB_TOKEN 은 이 리포에만 닿아 계정 전체 · private 조회가 되지 않는다
       - name: Run
@@ -79,3 +88,72 @@ jobs:
           STUDYLOG_PASSWORD: ${{ secrets.STUDYLOG_PASSWORD }}
           # schedule 발화에는 inputs 가 없어 빈 문자열이 온다 — 켜지는 것은 사람이 켠 실행뿐
           DRY_RUN: ${{ inputs.dry_run }}
+
+  # 결번이 확정된 실행을 사람에게 알리고, 그 날짜가 살아나면 닫는다. 9/25 는 1차 · 백업 둘 다
+  # 죽었는데 알림이 없어 이튿날 밤 우연히 발견했다 — 그때는 되살릴 시한이 거의 끝난 시각이었다.
+  alert:
+    needs: run
+    # 취소까지 받는다 — timeout-minutes 에 걸린 실행은 실패가 아니라 취소로 끝나는데 결번은 같다.
+    # dry-run 은 아무것도 올리지 않는 실행이라 결번과도 복구와도 무관하다
+    if: >-
+      always()
+      && needs.run.result != 'skipped'
+      && inputs.dry_run != true
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: 실패 이슈 열기 · 닫기
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RESULT: ${{ needs.run.result }}
+          DATE: ${{ needs.run.outputs.date }}
+          SCHEDULE: ${{ github.event.schedule }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # 위 schedule 의 1차 값과 같아야 한다
+          FIRST_SCHEDULE="7 15 * * *"
+
+          # 날짜 단계에 닿기 전에 죽으면(빌드 실패 등) 출력이 비어 있다 — 그때만 지금 시각으로 짓는다
+          [ -n "$DATE" ] || DATE=$(TZ=Asia/Seoul date -d yesterday +%Y-%m-%d)
+          TITLE="TIL 발행 실패 — $DATE"
+
+          # 검색은 후보를 좁히는 데만 쓰고 판정은 제목 완전 일치로 한다 — 검색은 낱말 단위라
+          # 날짜가 쪼개져 다른 날의 열린 이슈가 걸린다(ai-cards-news 에서 겪은 자리)
+          OPEN=$(gh issue list --state open --search "$TITLE in:title" --json number,title \
+            --jq ".[] | select(.title == \"$TITLE\") | .number")
+
+          # 살아난 날은 닫는다 — 열린 이슈 목록이 "지금 결번인 날" 만 가리키게
+          if [ "$RESULT" = "success" ]; then
+            for n in $OPEN; do
+              gh issue close "$n" --comment "$RUN_URL 실행으로 $DATE 복구."
+            done
+            exit 0
+          fi
+
+          # 1차 실패에는 열지 않는다 — 90분 뒤 백업이 같은 하루를 다시 돈다. 순서가 뒤바뀐 날도
+          # 백업의 실패가 먼저 이슈를 연다. 대가는 GitHub 이 백업 예약을 떨군 날 하나 — 그날은
+          # 1차의 실패가 마지막인데 이슈가 없다. 1차마다 열면 503 이 잦은 시기에 매일 쌓이는 소음이다
+          if [ "$SCHEDULE" = "$FIRST_SCHEDULE" ]; then
+            echo "$DATE 1차 실패 — 백업 발화가 다시 돈다. 이슈는 열지 않는다"
+            exit 0
+          fi
+
+          if [ -n "$OPEN" ]; then
+            echo "$TITLE 이슈가 이미 열려 있다 — 새로 만들지 않는다"
+            exit 0
+          fi
+
+          # 시한을 절대 시각으로 적는다 — "오늘 자정" 은 이튿날 읽으면 이미 지난 시각을 가리킨다
+          DEADLINE=$(date -d "$DATE +1 day" +%Y-%m-%d)
+          gh issue create --title "$TITLE" --label bug --body "$DATE (KST) 하루치 TIL 이 study-log 에 올라가지 않았다.
+
+          실행 로그: $RUN_URL
+
+          **되살리는 시한은 KST $DEADLINE 24:00 이다.** 봇은 실행 시각 기준 \"어제\" 만 처리하므로,
+          그 시각을 넘기면 이 날짜는 수동 실행으로도 다시 돌릴 수 없다.
+
+          Actions → daily-log → Run workflow (dry_run 끔). 이미 올라간 날은 요약 앞에서 건너뛰므로
+          중복 기록은 생기지 않고, 성공하면 이 이슈는 자동으로 닫힌다. 사유가 Gemini 503 이면
+          과부하가 풀린 뒤에 돌린다 — 실패한 요청도 하루 한도(20회)를 센다."
