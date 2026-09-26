@@ -79,3 +79,45 @@ jobs:
           STUDYLOG_PASSWORD: ${{ secrets.STUDYLOG_PASSWORD }}
           # schedule 발화에는 inputs 가 없어 빈 문자열이 온다 — 켜지는 것은 사람이 켠 실행뿐
           DRY_RUN: ${{ inputs.dry_run }}
+
+  # 결번이 확정된 실행만 사람에게 알린다. 9/25 는 1차 · 백업 둘 다 죽었는데 알림이 없어
+  # 이튿날 밤 우연히 발견했다 — 그때는 이미 되살릴 수 없는 시각이었다(아래 본문 참고).
+  alert:
+    needs: run
+    # 1차 발화의 실패에는 열지 않는다 — 90분 뒤 백업이 같은 하루를 다시 돈다. dry-run 은
+    # 아무것도 올리지 않는 실행이라 결번과 무관하다
+    if: >-
+      failure()
+      && github.event.schedule != '7 15 * * *'
+      && inputs.dry_run != true
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: 실패 이슈
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # 봇과 같은 규칙으로 대상 날짜를 짓는다 — 실행 시각 기준 KST 어제(DayWindow.yesterday)
+          DATE=$(TZ=Asia/Seoul date -d yesterday +%Y-%m-%d)
+          TITLE="TIL 발행 실패 — $DATE"
+
+          # 검색은 후보를 좁히는 데만 쓰고 중복 판정은 제목 완전 일치로 한다 — 검색은 낱말 단위라
+          # 날짜가 쪼개져 다른 날의 열린 이슈가 이 알림을 삼킬 수 있다(ai-cards-news 에서 겪은 자리)
+          if gh issue list --state open --search "$TITLE in:title" --json title --jq '.[].title' | grep -Fxq -- "$TITLE"; then
+            echo "$TITLE 이슈가 이미 열려 있다 — 새로 만들지 않는다"
+            exit 0
+          fi
+
+          gh issue create --title "$TITLE" --label bug --body "$DATE (KST) 하루치 TIL 이 study-log 에 올라가지 않았다.
+
+          실행 로그: $RUN_URL
+
+          **되살리는 시한은 KST 오늘 자정까지다.** 봇은 실행 시각 기준 \"어제\" 만 처리하므로,
+          자정을 넘기면 이 날짜는 수동 실행으로도 다시 돌릴 수 없다.
+
+          Actions → daily-log → Run workflow (dry_run 끔). 이미 올라간 날은 요약 앞에서 건너뛰므로
+          중복 기록은 생기지 않는다. 사유가 Gemini 503 이면 과부하가 풀린 뒤에 돌린다 — 실패한
+          요청도 하루 한도(20회)를 센다."
