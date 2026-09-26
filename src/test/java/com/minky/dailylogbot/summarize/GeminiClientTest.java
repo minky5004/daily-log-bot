@@ -31,16 +31,21 @@ class GeminiClientTest {
 	private static final String OK = """
 			{"candidates":[{"finishReason":"STOP","content":{"parts":[{"text":"본문"}]}}]}""";
 
+	/** 상한에 걸려 잘린 200 응답. 사고 토큰이 상한을 거의 다 먹은 모양이다. */
+	private static final String TRUNCATED = """
+			{"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"text":"{\\"summary\\""}]}}],
+			 "usageMetadata":{"candidatesTokenCount":120,"thoughtsTokenCount":7880}}""";
+
 	private static final List<Duration> SPACING = List.of(Duration.ofSeconds(30), Duration.ofSeconds(60));
 
 	private final AtomicInteger requests = new AtomicInteger();
 	/** 요청마다 두드린 모델. 경로의 {@code models/} 와 {@code :} 사이다. */
 	private final List<String> models = new ArrayList<>();
 	private final List<Duration> waits = new ArrayList<>();
-	/** 요청마다 실려 온 본문. 모델별로 무엇을 보냈는지 본다. */
-	private final List<JsonNode> bodies = new ArrayList<>();
-	/** 200 에 돌려줄 본문. 잘린 응답을 흉내 낼 때만 바꾼다. */
-	private String okBody = OK;
+	/** 요청마다 실려 온 본문 원문. 파싱은 단언에서 한다 — 핸들러에서 터지면 원인이 클라이언트 IOException 으로 가려진다. */
+	private final List<String> bodies = new ArrayList<>();
+	/** 200 에 차례로 돌려줄 본문. 비면 {@link #OK}. 잘린 응답을 흉내 낼 때만 채운다. */
+	private final Deque<String> okBodies = new ArrayDeque<>();
 	private HttpServer server;
 
 	@AfterEach
@@ -62,10 +67,10 @@ class GeminiClientTest {
 			requests.incrementAndGet();
 			String path = exchange.getRequestURI().getPath();
 			models.add(path.substring(path.lastIndexOf('/') + 1, path.indexOf(':')));
-			bodies.add(new ObjectMapper().readTree(exchange.getRequestBody()));
+			bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
 			// 준비한 것보다 많이 치면 요청 수 단언이 잡는다
 			int status = queue.isEmpty() ? 500 : queue.poll();
-			byte[] body = (status == 200 ? okBody : "{\"error\":{\"code\":%d}}".formatted(status))
+			byte[] body = (status == 200 ? (okBodies.isEmpty() ? OK : okBodies.poll()) : "{\"error\":{\"code\":%d}}".formatted(status))
 					.getBytes(StandardCharsets.UTF_8);
 			exchange.sendResponseHeaders(status, body.length);
 			try (OutputStream out = exchange.getResponseBody()) {
@@ -114,6 +119,8 @@ class GeminiClientTest {
 		assertEquals("본문", client.generate("p", SCHEMA));
 		assertEquals(List.of("gemini-3.6-flash", "gemini-3.6-flash", "gemini-3.6-flash", "gemini-2.5-flash"), models);
 		assertEquals(SPACING, waits);
+		// 9/25 가 밟은 경로 — 5xx 를 다 되친 끝의 폴백에도 예산이 실린다
+		assertEquals(2048, thinkingBudget(3));
 	}
 
 	@Test
@@ -134,23 +141,54 @@ class GeminiClientTest {
 		GeminiClient client = answering(429, 200);
 
 		client.generate("p", SCHEMA);
-		JsonNode primary = bodies.get(0).path("generationConfig");
-		JsonNode fallback = bodies.get(1).path("generationConfig");
-		assertTrue(primary.path("thinkingConfig").isMissingNode(), primary.toString());
-		assertEquals(2048, fallback.path("thinkingConfig").path("thinkingBudget").asInt(-1), fallback.toString());
+		assertTrue(config(0).path("thinkingConfig").isMissingNode(), config(0).toString());
+		assertEquals(2048, thinkingBudget(1));
 	}
 
 	@Test
-	@DisplayName("상한에 걸려 잘린 응답은 사용량을 실어 실패한다 — 사고 토큰이 몫을 먹었는지 로그로 갈린다")
+	@DisplayName("1차가 상한에 걸려 잘리면 되치지 않고 예산을 건 폴백으로 넘어간다")
+	void truncatedPrimaryFallsBack() throws IOException {
+		// 같은 입력이면 같게 잘린다 — 되치는 것은 한도만 먹는다
+		okBodies.add(TRUNCATED);
+		GeminiClient client = answering(200, 200);
+
+		assertEquals("본문", client.generate("p", SCHEMA));
+		assertEquals(List.of("gemini-3.6-flash", "gemini-2.5-flash"), models);
+		assertEquals(2048, thinkingBudget(1));
+		assertTrue(waits.isEmpty(), waits.toString());
+	}
+
+	@Test
+	@DisplayName("폴백까지 잘리면 사용량을 실어 실패한다 — 사고 토큰이 몫을 먹었는지 로그로 갈린다")
 	void truncatedResponseCarriesUsage() throws IOException {
-		okBody = """
-				{"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"text":"{\\"summary\\""}]}}],
-				 "usageMetadata":{"candidatesTokenCount":120,"thoughtsTokenCount":7880}}""";
-		GeminiClient client = answering(200);
+		okBodies.add(TRUNCATED);
+		okBodies.add(TRUNCATED);
+		GeminiClient client = answering(200, 200);
 
 		IllegalStateException e = assertThrows(IllegalStateException.class, () -> client.generate("p", SCHEMA));
 		assertTrue(e.getMessage().contains("MAX_TOKENS"), e.getMessage());
 		assertTrue(e.getMessage().contains("\"thoughtsTokenCount\":7880"), e.getMessage());
+	}
+
+	@Test
+	@DisplayName("사용량 필드가 없는 응답은 빈칸이 아니라 없다고 적는다")
+	void missingUsageIsNamed() throws IOException {
+		okBodies.add(TRUNCATED);
+		okBodies.add("""
+				{"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"text":"{"}]}}]}""");
+		GeminiClient client = answering(200, 200);
+
+		IllegalStateException e = assertThrows(IllegalStateException.class, () -> client.generate("p", SCHEMA));
+		assertTrue(e.getMessage().contains("usage 없음"), e.getMessage());
+	}
+
+	/** n 번째 요청의 generationConfig. */
+	private JsonNode config(int n) throws IOException {
+		return new ObjectMapper().readTree(bodies.get(n)).path("generationConfig");
+	}
+
+	private int thinkingBudget(int n) throws IOException {
+		return config(n).path("thinkingConfig").path("thinkingBudget").asInt(-1);
 	}
 
 	@Test

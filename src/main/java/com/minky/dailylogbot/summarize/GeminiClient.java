@@ -60,8 +60,8 @@ public final class GeminiClient implements SummaryModel {
 	  9/25 는 커밋 16 · PR 5 의 큰 하루에 1차 · 백업 둘 다 폴백에서 MAX_TOKENS 로 잘렸다. 입력이
 	  같으면 같게 잘리는 실패라 백업 발화로는 덮이지 않는다. 본문 상한(요약 100자 · 본문 2000자)이
 	  2~3천 토큰이라 2048 이면 합이 8000 안에 든다.
-	  1차 모델에는 싣지 않는다 — 3.x 는 숫자 예산이 아니라 thinkingLevel 이고, 거기서는 이
-	  잘림이 관측된 적이 없다.
+	  1차 모델에는 싣지 않는다 — 3.x 는 숫자 예산이 아니라 thinkingLevel 이라 같은 값을 옮길 수
+	  없다. 대신 1차가 같은 이유로 잘리면 이 예산을 건 폴백으로 넘어간다.
 	*/
 	private static final int FALLBACK_THINKING_BUDGET = 2048;
 
@@ -109,27 +109,38 @@ public final class GeminiClient implements SummaryModel {
 	 */
 	@Override
 	public String generate(String prompt, JsonNode responseSchema) {
-		String body = body(prompt, responseSchema, null);
-		HttpResponse<String> response = send(request(MODEL, body));
+		ObjectNode body = body(prompt, responseSchema);
+		HttpResponse<String> response = send(request(MODEL, body.toString()));
 		for (Duration wait : RETRY_WAITS) {
 			if (!retryable(response.statusCode())) {
 				break;
 			}
 			pause.accept(wait);
-			response = send(request(MODEL, body));
-		}
-		if (response.statusCode() == 200) {
-			return text(read(response.body()));
+			response = send(request(MODEL, body.toString()));
 		}
 
-		String failure = failure(MODEL, response);
-		if (!fallsBack(response.statusCode())) {
-			throw new IllegalStateException(failure);
+		String failure;
+		String reason = String.valueOf(response.statusCode());
+		if (response.statusCode() == 200) {
+			JsonNode answer = read(response.body());
+			// 잘린 응답도 폴백으로 넘긴다 — 상태 코드는 200 이지만 같은 입력이면 같게 잘려 되쳐도
+			// 소용이 없고, 사고 예산을 건 폴백만이 다른 결과를 낼 수 있다
+			if (!"MAX_TOKENS".equals(finishReason(answer))) {
+				return text(answer);
+			}
+			reason = "MAX_TOKENS · usage " + usage(answer);
+			failure = "Gemini %s → %s".formatted(MODEL, reason);
+		} else {
+			failure = failure(MODEL, response);
+			if (!fallsBack(response.statusCode())) {
+				throw new IllegalStateException(failure);
+			}
 		}
 		// 성공한 날에도 남긴다 — 이 줄이 없으면 그날 노트를 어느 모델이 썼는지 로그로 갈리지 않는다
-		System.out.printf("%s → %d · %s 로 넘어감%n", MODEL, response.statusCode(), FALLBACK_MODEL);
-		HttpResponse<String> fallback =
-				send(request(FALLBACK_MODEL, body(prompt, responseSchema, FALLBACK_THINKING_BUDGET)));
+		System.out.printf("%s → %s · %s 로 넘어감%n", MODEL, reason, FALLBACK_MODEL);
+		((ObjectNode) body.get("generationConfig"))
+				.putObject("thinkingConfig").put("thinkingBudget", FALLBACK_THINKING_BUDGET);
+		HttpResponse<String> fallback = send(request(FALLBACK_MODEL, body.toString()));
 		if (fallback.statusCode() != 200) {
 			// 첫 모델의 사유도 싣는다 — 폴백 쪽 오류만 남으면 왜 넘어갔는지가 로그에서 사라진다
 			throw new IllegalStateException(failure + "\n" + failure(FALLBACK_MODEL, fallback));
@@ -189,8 +200,8 @@ public final class GeminiClient implements SummaryModel {
 		}
 	}
 
-	/** {@code thinkingBudget} 이 {@code null} 이면 사고량을 모델에 맡긴다. */
-	private String body(String prompt, JsonNode responseSchema, Integer thinkingBudget) {
+	/** 사고량은 모델에 맡긴 본문. 폴백으로 넘어갈 때만 {@link #generate} 가 예산을 덧붙인다. */
+	private ObjectNode body(String prompt, JsonNode responseSchema) {
 		ObjectNode root = mapper.createObjectNode();
 		root.putArray("contents").addObject().putArray("parts").addObject().put("text", prompt);
 
@@ -198,11 +209,18 @@ public final class GeminiClient implements SummaryModel {
 		config.put("responseMimeType", "application/json");
 		config.set("responseSchema", responseSchema);
 		config.put("maxOutputTokens", MAX_OUTPUT_TOKENS);
-		if (thinkingBudget != null) {
-			config.putObject("thinkingConfig").put("thinkingBudget", thinkingBudget);
-		}
 
-		return root.toString();
+		return root;
+	}
+
+	private static String finishReason(JsonNode response) {
+		return response.path("candidates").path(0).path("finishReason").asText("");
+	}
+
+	/** 사용량. 응답에 필드가 없으면 빈 문자열 대신 그렇다고 적는다 — 0 과 부재가 로그에서 갈리게. */
+	private static String usage(JsonNode response) {
+		JsonNode usage = response.path("usageMetadata");
+		return usage.isMissingNode() ? "없음" : usage.toString();
 	}
 
 	/**
@@ -214,11 +232,11 @@ public final class GeminiClient implements SummaryModel {
 	 */
 	private static String text(JsonNode response) {
 		JsonNode candidate = response.path("candidates").path(0);
-		String finish = candidate.path("finishReason").asText("");
+		String finish = finishReason(response);
 		if (!finish.isEmpty() && !"STOP".equals(finish)) {
 			// 사용량을 함께 싣는다 — 상한을 사고 토큰이 먹었는지 본문이 먹었는지가 여기서만 갈린다
 			throw new IllegalStateException("Gemini 응답 중단 — finishReason %s · usage %s"
-					.formatted(finish, response.path("usageMetadata")));
+					.formatted(finish, usage(response)));
 		}
 
 		String text = candidate.path("content").path("parts").path(0).path("text").asText("");
