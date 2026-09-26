@@ -45,8 +45,11 @@ public class DailyLogBot {
 				System.getenv("STUDYLOG_USERNAME"),
 				System.getenv("STUDYLOG_PASSWORD"));
 
+		// 대상 날짜도 첫 호출 전에 판정한다 — 형식이 틀린 날짜를 계정 전체를 돈 뒤에 알면 GitHub 호출만 태운다.
+		// 예약 발화에는 입력이 없어 비어 오고, 그때는 어제다
+		DayWindow window = DayWindow.target(System.getenv("TARGET_DATE"), Clock.systemUTC());
+
 		String login = github.get("/user", Map.of()).path("login").asText();
-		DayWindow window = DayWindow.yesterday(Clock.systemUTC());
 
 		// 수집 결과를 변수로 받지 않는다. 익명화 이전 값이 스코프에 남아 있으면 다음 사이클이
 		// 무심코 집어 갈 수 있는 자리가 되고, 그 순간 방어선이 한 자리라는 전제가 깨진다

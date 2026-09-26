@@ -10,6 +10,8 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class DayWindowTest {
 
@@ -47,5 +49,38 @@ class DayWindowTest {
 		Clock delayed = Clock.fixed(Instant.parse("2026-08-16T20:40:00Z"), ZoneOffset.UTC);
 
 		assertEquals(DayWindow.yesterday(onTime), DayWindow.yesterday(delayed));
+	}
+
+	@Test
+	@DisplayName("지정 날짜가 없으면 어제 — 예약 발화의 기본")
+	void blankTargetFallsBackToYesterday() {
+		Clock clock = Clock.fixed(Instant.parse("2026-09-26T15:44:00Z"), ZoneOffset.UTC);
+		assertEquals(LocalDate.of(2026, 9, 26), DayWindow.target(null, clock).date());
+		assertEquals(LocalDate.of(2026, 9, 26), DayWindow.target("  ", clock).date());
+	}
+
+	@Test
+	@DisplayName("지정 날짜가 있으면 그 하루 — 어제만 되던 복구의 시한이 사라지는 자리")
+	void explicitTargetIsUsed() {
+		Clock clock = Clock.fixed(Instant.parse("2026-09-26T15:44:00Z"), ZoneOffset.UTC);
+		assertEquals(DayWindow.of(LocalDate.of(2026, 9, 25)), DayWindow.target("2026-09-25", clock));
+	}
+
+	@Test
+	@DisplayName("KST 오늘 · 미래는 거부 — 덜 끝난 하루를 올리면 그날 밤 예약이 이미 있음으로 건너뛴다")
+	void todayOrLaterIsRejected() {
+		// 15:44 UTC 는 KST 로 이미 9/27 00:44 — 오늘은 9/27
+		Clock clock = Clock.fixed(Instant.parse("2026-09-26T15:44:00Z"), ZoneOffset.UTC);
+		assertThrows(IllegalArgumentException.class, () -> DayWindow.target("2026-09-27", clock));
+		assertThrows(IllegalArgumentException.class, () -> DayWindow.target("2026-10-01", clock));
+	}
+
+	@Test
+	@DisplayName("형식이 틀린 날짜는 입력값을 실어 거부")
+	void malformedTargetIsRejected() {
+		Clock clock = Clock.fixed(Instant.parse("2026-09-26T15:44:00Z"), ZoneOffset.UTC);
+		IllegalArgumentException e =
+				assertThrows(IllegalArgumentException.class, () -> DayWindow.target("2026-9-25", clock));
+		assertTrue(e.getMessage().contains("2026-9-25"), e.getMessage());
 	}
 }
