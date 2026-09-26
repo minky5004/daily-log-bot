@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 /**
  * KST 하루를 GitHub 이 이해하는 UTC 구간으로 옮긴 것.
@@ -27,6 +28,35 @@ public record DayWindow(LocalDate date, Instant from, Instant toExclusive) {
 
 	public static DayWindow yesterday(Clock clock) {
 		return of(LocalDate.now(clock.withZone(SEOUL)).minusDays(1));
+	}
+
+	/**
+	 * 손으로 준 날짜의 하루. 비어 있으면 {@link #yesterday} — 러너는 워크플로가 늘 채워 넘기므로
+	 * 빈 값은 로컬 실행의 경로다.
+	 *
+	 * <p>KST 오늘 이후는 거부한다. 덜 끝난 하루를 올리면 그날 밤 예약이 제목으로 "이미 있음" 을
+	 * 판정해 건너뛰어, 올린 뒤의 커밋이 영영 빠진다. 어제만 되던 때는 시한(이튿날 자정)을 넘긴
+	 * 결번을 되살릴 길이 없었다 — 9/25 가 그 자리다.
+	 *
+	 * <p>공백을 걷지 않는다. 워크플로의 Target date 단계가 같은 입력을 표기 그대로 판정하므로, 여기서만
+	 * 받아 주면 같은 값이 로컬에서는 통과하고 러너에서는 거부된다 — 규칙의 짝은 그 단계다.
+	 */
+	public static DayWindow target(String requested, Clock clock) {
+		if (requested == null || requested.isBlank()) {
+			return yesterday(clock);
+		}
+		LocalDate date;
+		try {
+			date = LocalDate.parse(requested);
+		} catch (DateTimeParseException e) {
+			throw new IllegalArgumentException("날짜 형식은 YYYY-MM-DD — 받은 값 " + requested, e);
+		}
+		LocalDate today = LocalDate.now(clock.withZone(SEOUL));
+		if (!date.isBefore(today)) {
+			throw new IllegalArgumentException(
+					"KST 오늘(%s) 이전 날짜만 — 받은 값 %s · 덜 끝난 하루는 그날 밤 예약이 건너뛴다".formatted(today, date));
+		}
+		return of(date);
 	}
 
 	public String since() {

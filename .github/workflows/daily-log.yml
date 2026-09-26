@@ -2,7 +2,7 @@ name: daily-log
 
 # dry-run 은 아무것도 올리지 않고 초록으로 끝난다 — 목록에서 발행과 같은 줄로 보이면
 # 「어제치는 올라갔나」를 실행 목록으로 답할 수 없다
-run-name: daily-log${{ inputs.dry_run == true && ' (dry-run)' || '' }}
+run-name: daily-log${{ inputs.date && format(' {0}', inputs.date) || '' }}${{ inputs.dry_run == true && ' (dry-run)' || '' }}
 
 on:
   # KST 자정 무렵(15:07 UTC). 정각을 피하는 것은 매시 정각이 액션 예약의 가장 혼잡한 슬롯이라
@@ -22,6 +22,11 @@ on:
   # 실패한 날 되돌리기 · 사이클마다 러너를 밟는 수동 통로
   workflow_dispatch:
     inputs:
+      date:
+        # 어제만 되던 때는 결번의 시한이 이튿날 자정이었다 — 9/25 는 그 시한을 넘겨 되살릴 길이 없었다
+        description: '대상 날짜 YYYY-MM-DD (KST) — 비우면 어제 · 오늘 이후는 거부'
+        type: string
+        required: false
       dry_run:
         # 이미 올라간 날은 요약 앞 판정이 끊어 마크다운이 만들어지지 않는다. 본문 형식을
         # 고치는 사이클의 검증 통로가 그 출력뿐이라, 판정과 업로드만 건너뛰는 실행을 둔다
@@ -38,9 +43,11 @@ permissions:
 # 기록 둘이 된다 — 앞선 실행을 죽이지 않고 줄을 세운다.
 # dry-run 만 제 실행 번호로 빠지는 것은 대기 중인 발행을 밀어내지 않기 위해서다: 한 그룹에서
 # 대기할 수 있는 것은 하나뿐이라, 형식을 고치며 연달아 띄우는 dry-run 이 그 자리의 예약 발행을
-# 취소한다. 아무것도 쓰지 않는 실행이라 발행과 나란히 돌아도 무해하다
+# 취소한다. 아무것도 쓰지 않는 실행이라 발행과 나란히 돌아도 무해하다.
+# 발행 그룹은 대상 날짜별이다 — 중복 판정이 날짜 단위라 다른 날짜끼리는 줄 설 이유가 없고, 한 그룹이면
+# 밤 시간대에 띄운 날짜 지정 복구가 대기 중인 백업 예약을 취소하거나 그 반대가 된다
 concurrency:
-  group: daily-log-${{ inputs.dry_run == true && github.run_id || 'publish' }}
+  group: daily-log-${{ inputs.dry_run == true && github.run_id || format('publish-{0}', inputs.date || 'yesterday') }}
   cancel-in-progress: false
 
 jobs:
@@ -54,6 +61,30 @@ jobs:
     outputs:
       date: ${{ steps.day.outputs.date }}
     steps:
+      # 대상 날짜를 맨 앞에서 한 번 정하고 봇 · 알림이 같은 값을 쓴다 — 따로 지으면 자정 전에 시작한
+      # 실행에서 둘이 하루 어긋난다. 맨 앞인 것은 출력이 비는 경우를 이 단계의 거부 하나로 좁히기
+      # 위해서다(알림이 그 빈칸을 입력 오류로 읽는다). 규칙의 짝은 DayWindow.target(봇도 한 번 더 판정)
+      - name: Target date
+        id: day
+        env:
+          REQUESTED: ${{ inputs.date }}
+        run: |
+          if [ -n "$REQUESTED" ]; then
+            # date 가 되돌려 준 표기와 같아야 한다 — 2026-9-25 같은 느슨한 표기는 제목 판정을 가른다
+            D=$(date -d "$REQUESTED" +%Y-%m-%d 2>/dev/null)
+            if [ "$D" != "$REQUESTED" ]; then
+              echo "::error::날짜 형식은 YYYY-MM-DD — 받은 값 $REQUESTED"
+              exit 1
+            fi
+            if [ ! "$D" \< "$(TZ=Asia/Seoul date +%Y-%m-%d)" ]; then
+              echo "::error::KST 오늘 이전 날짜만 — 받은 값 $D"
+              exit 1
+            fi
+          else
+            D=$(TZ=Asia/Seoul date -d yesterday +%Y-%m-%d)
+          fi
+          echo "date=$D" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v7
 
       - name: Set up JDK 21
@@ -70,12 +101,6 @@ jobs:
       - name: Build
         run: ./gradlew build
 
-      # 봇이 처리할 날짜를 봇이 뜨기 직전에 적어 둔다(DayWindow.yesterday 와 같은 규칙) — 알림이
-      # 실패 시각으로 다시 지으면, 자정 전에 시작해 자정 뒤에 죽은 복구 실행의 이슈가 하루 어긋난다
-      - name: Target date
-        id: day
-        run: echo "date=$(TZ=Asia/Seoul date -d yesterday +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
-
       # 빌드와 나누는 것은 컴파일 실패와 실행 실패를 로그의 같은 자리에서 보지 않기 위해서
       # 자동 발급되는 GITHUB_TOKEN 은 이 리포에만 닿아 계정 전체 · private 조회가 되지 않는다
       - name: Run
@@ -88,6 +113,7 @@ jobs:
           STUDYLOG_PASSWORD: ${{ secrets.STUDYLOG_PASSWORD }}
           # schedule 발화에는 inputs 가 없어 빈 문자열이 온다 — 켜지는 것은 사람이 켠 실행뿐
           DRY_RUN: ${{ inputs.dry_run }}
+          TARGET_DATE: ${{ steps.day.outputs.date }}
 
   # 결번이 확정된 실행을 사람에게 알리고, 그 날짜가 살아나면 닫는다. 9/25 는 1차 · 백업 둘 다
   # 죽었는데 알림이 없어 이튿날 밤 우연히 발견했다 — 그때는 되살릴 시한이 거의 끝난 시각이었다.
@@ -110,13 +136,22 @@ jobs:
           RESULT: ${{ needs.run.result }}
           DATE: ${{ needs.run.outputs.date }}
           SCHEDULE: ${{ github.event.schedule }}
+          REQUESTED: ${{ inputs.date }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # 위 schedule 의 1차 값과 같아야 한다
           FIRST_SCHEDULE="7 15 * * *"
 
-          # 날짜 단계에 닿기 전에 죽으면(빌드 실패 등) 출력이 비어 있다 — 그때만 지금 시각으로 짓는다
-          [ -n "$DATE" ] || DATE=$(TZ=Asia/Seoul date -d yesterday +%Y-%m-%d)
+          # 날짜 단계는 run 잡의 맨 앞이라 출력이 비는 것은 그 단계가 입력을 거부했거나 러너가 뜨지도
+          # 못한 때뿐이다. 손으로 준 날짜가 거부된 실행은 열지 않는다 — 결번이 아니라 입력 오류고,
+          # 돌린 사람이 보고 있다. 예약 발화에서 비었으면 지금 시각으로 짓는다
+          if [ -z "$DATE" ]; then
+            if [ -n "$REQUESTED" ]; then
+              echo "손으로 준 날짜 $REQUESTED 의 실행 — 날짜가 정해지기 전에 끝나 이슈는 열지 않는다"
+              exit 0
+            fi
+            DATE=$(TZ=Asia/Seoul date -d yesterday +%Y-%m-%d)
+          fi
           TITLE="TIL 발행 실패 — $DATE"
 
           # 검색은 후보를 좁히는 데만 쓰고 판정은 제목 완전 일치로 한다 — 검색은 낱말 단위라
@@ -145,15 +180,10 @@ jobs:
             exit 0
           fi
 
-          # 시한을 절대 시각으로 적는다 — "오늘 자정" 은 이튿날 읽으면 이미 지난 시각을 가리킨다
-          DEADLINE=$(date -d "$DATE +1 day" +%Y-%m-%d)
           gh issue create --title "$TITLE" --label bug --body "$DATE (KST) 하루치 TIL 이 study-log 에 올라가지 않았다.
 
           실행 로그: $RUN_URL
 
-          **되살리는 시한은 KST $DEADLINE 24:00 이다.** 봇은 실행 시각 기준 \"어제\" 만 처리하므로,
-          그 시각을 넘기면 이 날짜는 수동 실행으로도 다시 돌릴 수 없다.
-
-          Actions → daily-log → Run workflow (dry_run 끔). 이미 올라간 날은 요약 앞에서 건너뛰므로
+          Actions → daily-log → Run workflow · date 에 \`$DATE\` · dry_run 끔. 이미 올라간 날은 요약 앞에서 건너뛰므로
           중복 기록은 생기지 않고, 성공하면 이 이슈는 자동으로 닫힌다. 사유가 Gemini 503 이면
           과부하가 풀린 뒤에 돌린다 — 실패한 요청도 하루 한도(20회)를 센다."

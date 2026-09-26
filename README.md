@@ -43,6 +43,7 @@ export GEMINI_API_KEY=...
 export STUDYLOG_BASE_URL=https://study-log-n6ez.onrender.com
 export STUDYLOG_USERNAME=... STUDYLOG_PASSWORD=...
 ./gradlew run                          # 어제 하루를 수집 → 요약 → 조립 → 업로드
+TARGET_DATE=2026-09-25 ./gradlew run   # 지정한 하루 · KST 오늘 이후는 거부
 ```
 
 다섯 중 하나라도 누락 시 수집 전 중단 — 계정 전체를 다 돌고 나서야 키의 부재를 아는 실행은
@@ -53,13 +54,14 @@ GitHub 호출만 태우고 끝나는 것.
 ```bash
 gh workflow run daily-log.yml --ref dev -R minky5004/daily-log-bot
 gh workflow run daily-log.yml --ref dev -f dry_run=true -R minky5004/daily-log-bot   # 올리지 않고 마크다운만
+gh workflow run daily-log.yml --ref dev -f date=2026-09-25 -R minky5004/daily-log-bot  # 빠진 날 되살리기
 ```
 
 ## 구조
 
 ```
 daily-log-bot/
-├── .github/workflows/daily-log.yml   KST 자정 cron · 90분 뒤 백업 발화 · 수동 실행(되돌리기 · dry-run)
+├── .github/workflows/daily-log.yml   KST 자정 cron · 90분 뒤 백업 발화 · 수동 실행(날짜 지정 되돌리기 · dry-run) · 결번 확정 시 실패 이슈
 └── src/main/java/com/minky/dailylogbot/
     ├── DailyLogBot.java              진입점 — 수집 → 요약 → 조립 → 업로드
     ├── collect/                      GitHub 조회 · KST 하루를 UTC 구간으로(DayWindow)
