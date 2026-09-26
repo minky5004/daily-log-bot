@@ -37,6 +37,10 @@ class GeminiClientTest {
 	/** 요청마다 두드린 모델. 경로의 {@code models/} 와 {@code :} 사이다. */
 	private final List<String> models = new ArrayList<>();
 	private final List<Duration> waits = new ArrayList<>();
+	/** 요청마다 실려 온 본문. 모델별로 무엇을 보냈는지 본다. */
+	private final List<JsonNode> bodies = new ArrayList<>();
+	/** 200 에 돌려줄 본문. 잘린 응답을 흉내 낼 때만 바꾼다. */
+	private String okBody = OK;
 	private HttpServer server;
 
 	@AfterEach
@@ -58,10 +62,10 @@ class GeminiClientTest {
 			requests.incrementAndGet();
 			String path = exchange.getRequestURI().getPath();
 			models.add(path.substring(path.lastIndexOf('/') + 1, path.indexOf(':')));
-			exchange.getRequestBody().readAllBytes();
+			bodies.add(new ObjectMapper().readTree(exchange.getRequestBody()));
 			// 준비한 것보다 많이 치면 요청 수 단언이 잡는다
 			int status = queue.isEmpty() ? 500 : queue.poll();
-			byte[] body = (status == 200 ? OK : "{\"error\":{\"code\":%d}}".formatted(status))
+			byte[] body = (status == 200 ? okBody : "{\"error\":{\"code\":%d}}".formatted(status))
 					.getBytes(StandardCharsets.UTF_8);
 			exchange.sendResponseHeaders(status, body.length);
 			try (OutputStream out = exchange.getResponseBody()) {
@@ -122,6 +126,31 @@ class GeminiClientTest {
 		assertTrue(e.getMessage().contains("gemini-2.5-flash → 503"), e.getMessage());
 		assertEquals(4, requests.get());
 		assertEquals(SPACING, waits);
+	}
+
+	@Test
+	@DisplayName("폴백 요청에만 사고 예산을 싣는다 — 1차 모델의 요청은 그대로다")
+	void fallbackCapsThinking() throws IOException {
+		GeminiClient client = answering(429, 200);
+
+		client.generate("p", SCHEMA);
+		JsonNode primary = bodies.get(0).path("generationConfig");
+		JsonNode fallback = bodies.get(1).path("generationConfig");
+		assertTrue(primary.path("thinkingConfig").isMissingNode(), primary.toString());
+		assertEquals(2048, fallback.path("thinkingConfig").path("thinkingBudget").asInt(-1), fallback.toString());
+	}
+
+	@Test
+	@DisplayName("상한에 걸려 잘린 응답은 사용량을 실어 실패한다 — 사고 토큰이 몫을 먹었는지 로그로 갈린다")
+	void truncatedResponseCarriesUsage() throws IOException {
+		okBody = """
+				{"candidates":[{"finishReason":"MAX_TOKENS","content":{"parts":[{"text":"{\\"summary\\""}]}}],
+				 "usageMetadata":{"candidatesTokenCount":120,"thoughtsTokenCount":7880}}""";
+		GeminiClient client = answering(200);
+
+		IllegalStateException e = assertThrows(IllegalStateException.class, () -> client.generate("p", SCHEMA));
+		assertTrue(e.getMessage().contains("MAX_TOKENS"), e.getMessage());
+		assertTrue(e.getMessage().contains("\"thoughtsTokenCount\":7880"), e.getMessage());
 	}
 
 	@Test
