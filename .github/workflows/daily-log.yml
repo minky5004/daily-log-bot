@@ -43,9 +43,11 @@ permissions:
 # 기록 둘이 된다 — 앞선 실행을 죽이지 않고 줄을 세운다.
 # dry-run 만 제 실행 번호로 빠지는 것은 대기 중인 발행을 밀어내지 않기 위해서다: 한 그룹에서
 # 대기할 수 있는 것은 하나뿐이라, 형식을 고치며 연달아 띄우는 dry-run 이 그 자리의 예약 발행을
-# 취소한다. 아무것도 쓰지 않는 실행이라 발행과 나란히 돌아도 무해하다
+# 취소한다. 아무것도 쓰지 않는 실행이라 발행과 나란히 돌아도 무해하다.
+# 발행 그룹은 대상 날짜별이다 — 중복 판정이 날짜 단위라 다른 날짜끼리는 줄 설 이유가 없고, 한 그룹이면
+# 밤 시간대에 띄운 날짜 지정 복구가 대기 중인 백업 예약을 취소하거나 그 반대가 된다
 concurrency:
-  group: daily-log-${{ inputs.dry_run == true && github.run_id || 'publish' }}
+  group: daily-log-${{ inputs.dry_run == true && github.run_id || format('publish-{0}', inputs.date || 'yesterday') }}
   cancel-in-progress: false
 
 jobs:
@@ -59,24 +61,9 @@ jobs:
     outputs:
       date: ${{ steps.day.outputs.date }}
     steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v5
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      # 매 실행마다 도는 Gradle 빌드가 이 스택의 대가라, 캐시는 선택이 아니라 전제다.
-      # v6 은 캐시를 별도 약관이 붙는 비공개 컴포넌트로 분리 — 라이선스 판단이라 v5 유지
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
-
-      - name: Build
-        run: ./gradlew build
-
-      # 대상 날짜를 여기서 한 번 정하고 봇 · 알림이 같은 값을 쓴다 — 따로 지으면 자정 전에 시작한
-      # 실행에서 둘이 하루 어긋난다. 규칙은 DayWindow.target 과 같다(봇도 한 번 더 판정)
+      # 대상 날짜를 맨 앞에서 한 번 정하고 봇 · 알림이 같은 값을 쓴다 — 따로 지으면 자정 전에 시작한
+      # 실행에서 둘이 하루 어긋난다. 맨 앞인 것은 출력이 비는 경우를 이 단계의 거부 하나로 좁히기
+      # 위해서다(알림이 그 빈칸을 입력 오류로 읽는다). 규칙의 짝은 DayWindow.target(봇도 한 번 더 판정)
       - name: Target date
         id: day
         env:
@@ -97,6 +84,22 @@ jobs:
             D=$(TZ=Asia/Seoul date -d yesterday +%Y-%m-%d)
           fi
           echo "date=$D" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # 매 실행마다 도는 Gradle 빌드가 이 스택의 대가라, 캐시는 선택이 아니라 전제다.
+      # v6 은 캐시를 별도 약관이 붙는 비공개 컴포넌트로 분리 — 라이선스 판단이라 v5 유지
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Build
+        run: ./gradlew build
 
       # 빌드와 나누는 것은 컴파일 실패와 실행 실패를 로그의 같은 자리에서 보지 않기 위해서
       # 자동 발급되는 GITHUB_TOKEN 은 이 리포에만 닿아 계정 전체 · private 조회가 되지 않는다
@@ -139,8 +142,9 @@ jobs:
           # 위 schedule 의 1차 값과 같아야 한다
           FIRST_SCHEDULE="7 15 * * *"
 
-          # 날짜 단계에 닿기 전에 죽으면(빌드 실패 등) 출력이 비어 있다 — 그때만 지금 시각으로 짓는다.
-          # 손으로 준 날짜가 거부된 실행은 열지 않는다 — 결번이 아니라 입력 오류고, 돌린 사람이 보고 있다
+          # 날짜 단계는 run 잡의 맨 앞이라 출력이 비는 것은 그 단계가 입력을 거부했거나 러너가 뜨지도
+          # 못한 때뿐이다. 손으로 준 날짜가 거부된 실행은 열지 않는다 — 결번이 아니라 입력 오류고,
+          # 돌린 사람이 보고 있다. 예약 발화에서 비었으면 지금 시각으로 짓는다
           if [ -z "$DATE" ]; then
             if [ -n "$REQUESTED" ]; then
               echo "손으로 준 날짜 $REQUESTED 의 실행 — 날짜가 정해지기 전에 끝나 이슈는 열지 않는다"

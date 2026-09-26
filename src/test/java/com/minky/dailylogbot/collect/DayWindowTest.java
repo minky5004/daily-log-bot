@@ -82,5 +82,7 @@ class DayWindowTest {
 		IllegalArgumentException e =
 				assertThrows(IllegalArgumentException.class, () -> DayWindow.target("2026-9-25", clock));
 		assertTrue(e.getMessage().contains("2026-9-25"), e.getMessage());
+		// 워크플로 Target date 단계와 같은 판정 — 공백이 섞인 표기도 거부
+		assertThrows(IllegalArgumentException.class, () -> DayWindow.target(" 2026-09-25", clock));
 	}
 }

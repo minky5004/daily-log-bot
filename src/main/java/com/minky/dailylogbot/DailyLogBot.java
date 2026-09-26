@@ -46,7 +46,8 @@ public class DailyLogBot {
 				System.getenv("STUDYLOG_PASSWORD"));
 
 		// 대상 날짜도 첫 호출 전에 판정한다 — 형식이 틀린 날짜를 계정 전체를 돈 뒤에 알면 GitHub 호출만 태운다.
-		// 예약 발화에는 입력이 없어 비어 오고, 그때는 어제다
+		// 러너에서는 워크플로의 Target date 단계가 늘 채워 넘긴다(예약 발화면 그 단계가 지은 어제).
+		// 비어 오는 것은 로컬 실행뿐이고, 그때는 어제다
 		DayWindow window = DayWindow.target(System.getenv("TARGET_DATE"), Clock.systemUTC());
 
 		String login = github.get("/user", Map.of()).path("login").asText();
