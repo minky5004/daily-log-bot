@@ -14,6 +14,12 @@ import java.util.Set;
 /** 설계 5절의 수집 규칙 그 자체. */
 public final class ActivityCollector {
 
+	/**
+	 * 개발 기록에 들이지 않는 리포. 코테 풀이 리포는 백준허브가 정답마다 커밋을 올리는 곳이라,
+	 * 들이면 분야 `개발` 기록에 문제 풀이가 섞이고 프로젝트가 없던 날도 풀이 두 건짜리 기록이 생긴다.
+	 */
+	private static final Set<String> EXCLUDED = Set.of("minky5004/coding-test");
+
 	private final GitHubClient github;
 	private final String login;
 	private final Map<String, Boolean> privacy = new LinkedHashMap<>();
@@ -43,7 +49,8 @@ public final class ActivityCollector {
 
 			// 한 번도 push 되지 않은 리포는 pushed_at 이 null 이다
 			JsonNode pushedAt = repo.path("pushed_at");
-			if (pushedAt.isTextual() && !Instant.parse(pushedAt.asText()).isBefore(window.from())) {
+			if (pushedAt.isTextual() && !Instant.parse(pushedAt.asText()).isBefore(window.from())
+					&& !excluded(repo.path("full_name").asText())) {
 				touched.add(repo);
 			}
 		}
@@ -116,6 +123,9 @@ public final class ActivityCollector {
 		List<DailyActivity.PullRequest> pulls = new ArrayList<>();
 		for (JsonNode item : found.path("items")) {
 			String repo = item.path("repository_url").asText().replace("https://api.github.com/repos/", "");
+			if (excluded(repo)) {
+				continue;
+			}
 			JsonNode body = item.path("body");
 			pulls.add(new DailyActivity.PullRequest(
 					repo,
@@ -127,6 +137,10 @@ public final class ActivityCollector {
 		}
 		pulls.sort(Comparator.comparing(DailyActivity.PullRequest::createdAt));
 		return List.copyOf(pulls);
+	}
+
+	static boolean excluded(String fullName) {
+		return EXCLUDED.contains(fullName);
 	}
 
 	/**

@@ -2,7 +2,7 @@
 
 📎 [Notion 정리](https://app.notion.com/p/3e47b7516d7c81df84d9f28c007b1ffa)
 
-> 매일 자정 · 계정 전체의 그날 커밋과 PR 로 접은 TIL 한 장을 [study-log](https://study-log-n6ez.onrender.com) 에 올리는 봇
+> 매일 자정 · 계정 전체(코테 풀이 리포 제외)의 그날 커밋과 PR 로 접은 TIL 한 장을 [study-log](https://study-log-n6ez.onrender.com) 에 올리는 봇
 
 **산출물 — [봇이 올린 기록](https://study-log-n6ez.onrender.com/logs?keyword=%EA%B0%9C%EB%B0%9C%20%EA%B8%B0%EB%A1%9D)** · 이 도구의 결과물은 배포된 화면 아닌 매일 쌓이는 기록 · 무료 티어 · 첫 접속은 기동 대기 약 3분
 
@@ -30,7 +30,7 @@ Gemini 호출을 태우지 않기 위해서.
 | HTTP · JSON | JDK `HttpClient` · Jackson (프레임워크 없음 · 직접 의존 1개) |
 | 외부 | GitHub REST · Gemini `gemini-3.6-flash`(막힌 날 `gemini-2.5-flash`) 무료 티어 · study-log 폼 로그인과 `/import` |
 | 실행 주체 | GitHub Actions `schedule` cron |
-| Test | JUnit 5 · 80개 |
+| Test | JUnit 5 · GitHub · Gemini · study-log 실제 호출 없는 판단 테스트 |
 
 ## 실행
 
